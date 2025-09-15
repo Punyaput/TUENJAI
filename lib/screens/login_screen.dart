@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/logo_widget.dart';
 import '../widgets/background_circles.dart';
+import './otp_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -115,7 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Background circles (fixed)
+            // Background circles
             Positioned(
               top: -screenHeight * 0.08,
               left: -screenWidth * 0.34,
@@ -140,13 +141,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     'Login',
                     style: TextStyle(
                       fontFamily: 'Raleway',
-                      fontSize: screenWidth * 0.13,
+                      fontSize: screenWidth * 0.11,
                       fontWeight: FontWeight.bold,
                       color: const Color(0xFF2E88F3),
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  SizedBox(height: screenHeight * 0.05),
+                  SizedBox(height: screenHeight * 0.02),
 
                   // Phone input
                   Container(
@@ -313,15 +314,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   SizedBox(height: screenHeight * 0.05),
 
                   CustomButton(
-                    text: 'ดำเนินการต่อ',
-                    isEnabled: _isFormValid,
-                    onPressed: _isFormValid
-                        ? () {
-                            print(
-                                'Continue with phone: $_selectedCountryCode${_phoneController.text}');
-                          }
-                        : () {},
-                  ),
+                  text: 'ดำเนินการต่อ',
+                  isEnabled: _isFormValid,
+                  onPressed: _isFormValid
+                      ? () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => OtpVerificationScreen(
+                                phoneNumber: _phoneController.text,
+                                countryCode: _selectedCountryCode,
+                              ),
+                            ),
+                          );
+                        }
+                      : () {},
+                ),
 
                   SizedBox(height: screenHeight * 0.2), // bottom padding
                 ],

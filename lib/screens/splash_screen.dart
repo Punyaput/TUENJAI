@@ -14,7 +14,7 @@ class SplashScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      resizeToAvoidBottomInset: false, // Prevents layout changes when keyboard appears
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Stack(
           children: [
