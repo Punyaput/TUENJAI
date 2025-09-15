@@ -12,8 +12,8 @@ class LogoWidget extends StatelessWidget {
       width: logoSize,
       height: logoSize,
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
         color: Colors.white,
+        borderRadius: BorderRadius.circular(20), // 👈 rounded square
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
@@ -26,8 +26,8 @@ class LogoWidget extends StatelessWidget {
       child: Center(
         child: Image.asset(
           'assets/images/Logo_TUENJAI.png',
-          width: logoSize * 0.7,
-          height: logoSize * 0.7,
+          width: logoSize,
+          height: logoSize,
           fit: BoxFit.contain,
         ),
       ),

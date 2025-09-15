@@ -132,7 +132,6 @@ class _LoginScreenState extends State<LoginScreen> {
             SingleChildScrollView(
               padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.1),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   SizedBox(height: screenHeight * 0.1),
                   const LogoWidget(),
