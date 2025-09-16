@@ -2,26 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/background_circles.dart';
-import './home_screen.dart';
 
-class ProfileSetupScreen extends StatefulWidget {
-  const ProfileSetupScreen({super.key});
+class ProfileSettingsScreen extends StatefulWidget {
+  const ProfileSettingsScreen({super.key});
 
   @override
-  State<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
+  State<ProfileSettingsScreen> createState() => _ProfileSettingsScreenState();
 }
 
-class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
+class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   String? _selectedProfileImage;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load existing user data
+    _usernameController.text = 'ผู้ใช้งาน'; // Example existing data
+    _descriptionController.text = ''; // Example existing data
+  }
 
   bool get _isFormValid {
     return _usernameController.text.trim().isNotEmpty;
   }
 
   void _selectProfileImage() {
-    // Show image picker options
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -120,21 +126,26 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     );
   }
 
-  void _completeSetup() {
+  void _saveProfile() {
     if (_isFormValid) {
-      print('Profile setup completed:');
+      print('Profile updated:');
       print('Username: ${_usernameController.text}');
       print('Description: ${_descriptionController.text}');
       print('Profile Image: $_selectedProfileImage');
       
-      // Navigate to main app or show success
-      // For now, just show a snackbar
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const HomeScreen(),
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'บันทึกข้อมูลเรียบร้อยแล้ว',
+            style: TextStyle(fontFamily: 'NotoLoopedThaiUI'),
+          ),
+          backgroundColor: Color(0xFF7ED6A8),
         ),
       );
+      
+      // Go back to settings
+      Navigator.pop(context);
     }
   }
 
@@ -145,8 +156,25 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      resizeToAvoidBottomInset: false,
-      body: SafeArea(   // ✅ Wrap here
+      resizeToAvoidBottomInset: true,
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF9FAFB),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF374151)),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'ตั้งค่าโปรไฟล์',
+          style: TextStyle(
+            fontFamily: 'NotoLoopedThaiUI',
+            color: Color(0xFF374151),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: SafeArea(
         child: Stack(
           children: [
             // Only bottom circles (no top circles as specified)
@@ -161,36 +189,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               padding: EdgeInsets.only(
                 left: screenWidth * 0.1,
                 right: screenWidth * 0.1,
-                bottom: MediaQuery.of(context).viewInsets.bottom, // 👈 keyboard-aware padding
+                bottom: MediaQuery.of(context).viewInsets.bottom,
               ),
               child: Column(
                 children: [
                   SizedBox(height: screenHeight * 0.08),
-
-                  // Header
-                  Text(
-                    'ตั้งค่าโปรไฟล์',
-                    style: TextStyle(
-                      fontFamily: 'NotoLoopedThaiUI',
-                      fontSize: screenWidth * 0.08,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF2E88F3),
-                    ),
-                  ),
-
-                  SizedBox(height: screenHeight * 0.01),
-
-                  Text(
-                    'กรุณากรอกข้อมูลเพื่อสร้างโปรไฟล์ของคุณ',
-                    style: TextStyle(
-                      fontFamily: 'NotoLoopedThaiUI',
-                      fontSize: screenWidth * 0.04,
-                      color: const Color(0xFF6B7280),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-
-                  SizedBox(height: screenHeight * 0.04),
 
                   // Profile Image Section
                   GestureDetector(
@@ -225,13 +228,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
-                                  Icons.add_a_photo,
+                                  Icons.person,
                                   size: screenWidth * 0.08,
                                   color: const Color(0xFFD1D5DB),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'เพิ่มรูป',
+                                  'แก้ไขรูป',
                                   style: TextStyle(
                                     fontFamily: 'NotoLoopedThaiUI',
                                     fontSize: screenWidth * 0.03,
@@ -358,11 +361,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
                   SizedBox(height: screenHeight * 0.05),
 
-                  // Complete Setup Button
+                  // Save Button
                   CustomButton(
-                    text: 'สร้างโปรไฟล์',
+                    text: 'บันทึก',
                     isEnabled: _isFormValid,
-                    onPressed: _completeSetup,
+                    onPressed: _saveProfile,
                   ),
 
                   SizedBox(height: screenHeight * 0.15),
@@ -374,7 +377,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       ),
     );
   }
-
 
   @override
   void dispose() {
