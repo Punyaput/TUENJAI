@@ -1,8 +1,15 @@
+// lib/screens/profile_setup_screen.dart
+
+import 'dart:io'; // Import for File
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart'; // Import Storage
+import 'package:image_picker/image_picker.dart'; // Import Image Picker
+import './role_selection_screen.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/background_circles.dart';
-import './home_screen.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -14,14 +21,38 @@ class ProfileSetupScreen extends StatefulWidget {
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
-  String? _selectedProfileImage;
+
+  // --- NEW: State for image file ---
+  XFile? _imageFile; // image_picker returns XFile
+  final ImagePicker _picker = ImagePicker(); // Instance of image picker
+  // --- END NEW ---
+
+  bool _isLoading = false;
 
   bool get _isFormValid {
-    return _usernameController.text.trim().isNotEmpty;
+    return _usernameController.text.trim().isNotEmpty && !_isLoading;
+  }
+
+  // --- UPDATED: Image selection logic ---
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        maxWidth: 800, // Optional: Resize image
+        imageQuality: 70, // Optional: Compress image
+      );
+      if (pickedFile != null && mounted) {
+        setState(() {
+          _imageFile = pickedFile;
+        });
+      }
+    } catch (e) {
+      print("Error picking image: $e");
+      _showError("เกิดข้อผิดพลาดในการเลือกรูปภาพ: $e");
+    }
   }
 
   void _selectProfileImage() {
-    // Show image picker options
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -59,9 +90,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     label: 'กล้อง',
                     onTap: () {
                       Navigator.pop(context);
-                      setState(() {
-                        _selectedProfileImage = 'camera';
-                      });
+                      _pickImage(ImageSource.camera); // <-- Use _pickImage
                     },
                   ),
                   _buildImageOption(
@@ -69,9 +98,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     label: 'แกลเลอรี่',
                     onTap: () {
                       Navigator.pop(context);
-                      setState(() {
-                        _selectedProfileImage = 'gallery';
-                      });
+                      _pickImage(ImageSource.gallery); // <-- Use _pickImage
                     },
                   ),
                 ],
@@ -89,6 +116,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     required String label,
     required VoidCallback onTap,
   }) {
+    // ... (This widget is unchanged) ...
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -100,11 +128,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               color: const Color(0xFF2E88F3).withOpacity(0.1),
               borderRadius: BorderRadius.circular(30),
             ),
-            child: Icon(
-              icon,
-              size: 30,
-              color: const Color(0xFF2E88F3),
-            ),
+            child: Icon(icon, size: 30, color: const Color(0xFF2E88F3)),
           ),
           const SizedBox(height: 8),
           Text(
@@ -120,22 +144,102 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     );
   }
 
-  void _completeSetup() {
-    if (_isFormValid) {
-      print('Profile setup completed:');
-      print('Username: ${_usernameController.text}');
-      print('Description: ${_descriptionController.text}');
-      print('Profile Image: $_selectedProfileImage');
-      
-      // Navigate to main app or show success
-      // For now, just show a snackbar
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const HomeScreen(),
-        ),
+  // --- NEW: Function to upload image to Firebase Storage ---
+  Future<String?> _uploadImageToStorage(XFile imageFile, String userId) async {
+    try {
+      // Create a unique file name (e.g., using userId and timestamp)
+      final String fileName =
+          'profile_pics/${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final Reference storageRef = FirebaseStorage.instance.ref().child(
+        fileName,
       );
+
+      // Upload the file
+      final UploadTask uploadTask = storageRef.putFile(
+        File(imageFile.path),
+      ); // Convert XFile to File
+
+      // Get download URL after upload completes
+      final TaskSnapshot snapshot = await uploadTask;
+      final String downloadUrl = await snapshot.ref.getDownloadURL();
+      print("Image uploaded successfully: $downloadUrl");
+      return downloadUrl;
+    } catch (e) {
+      print("Error uploading image: $e");
+      _showError("เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ: $e");
+      return null; // Return null if upload fails
     }
+  }
+  // --- END NEW ---
+
+  // --- UPDATED: Save profile data including profile picture URL ---
+  void _completeSetup() async {
+    if (!_isFormValid) return;
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception("User not logged in.");
+
+      final db = FirebaseFirestore.instance;
+      String? profilePicUrl; // Variable to hold the URL
+
+      // --- Upload image if one was selected ---
+      if (_imageFile != null) {
+        profilePicUrl = await _uploadImageToStorage(_imageFile!, user.uid);
+        if (profilePicUrl == null) {
+          // Handle upload failure (maybe prevent saving profile?)
+          setState(() {
+            _isLoading = false;
+          });
+          return; // Stop if upload failed
+        }
+      }
+      // --- End image upload ---
+
+      // Update the user document in Firestore
+      await db.collection('users').doc(user.uid).update({
+        'username': _usernameController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        // Only add/update the URL if upload was successful
+        if (profilePicUrl != null) 'profilePicUrl': profilePicUrl,
+        'profileLastUpdated': FieldValue.serverTimestamp(),
+      });
+
+      print('Profile setup completed for user: ${user.uid}');
+      if (profilePicUrl != null) print('Profile Pic URL: $profilePicUrl');
+
+      // Navigate to Role Selection screen
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
+        );
+      }
+    } catch (e) {
+      print('Error completing profile setup: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showError('เกิดข้อผิดพลาดในการบันทึกโปรไฟล์: $e');
+      }
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontFamily: 'NotoLoopedThaiUI'),
+        ),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 
   @override
@@ -145,29 +249,25 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      resizeToAvoidBottomInset: false,
-      body: SafeArea(   // ✅ Wrap here
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
         child: Stack(
           children: [
-            // Only bottom circles (no top circles as specified)
             Positioned(
               bottom: -screenWidth * 0.18,
               left: -screenWidth * 0.2,
               child: const BottomBackgroundCircles(),
             ),
-
-            // Main content
             SingleChildScrollView(
               padding: EdgeInsets.only(
                 left: screenWidth * 0.1,
                 right: screenWidth * 0.1,
-                bottom: MediaQuery.of(context).viewInsets.bottom, // 👈 keyboard-aware padding
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                top: screenHeight * 0.05,
               ),
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  SizedBox(height: screenHeight * 0.08),
-
-                  // Header
                   Text(
                     'ตั้งค่าโปรไฟล์',
                     style: TextStyle(
@@ -177,9 +277,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       color: const Color(0xFF2E88F3),
                     ),
                   ),
-
                   SizedBox(height: screenHeight * 0.01),
-
                   Text(
                     'กรุณากรอกข้อมูลเพื่อสร้างโปรไฟล์ของคุณ',
                     style: TextStyle(
@@ -189,45 +287,29 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-
                   SizedBox(height: screenHeight * 0.04),
 
-                  // Profile Image Section
+                  // --- UPDATED Profile Image Section ---
                   GestureDetector(
                     onTap: _selectProfileImage,
-                    child: Container(
-                      width: screenWidth * 0.3,
-                      height: screenWidth * 0.3,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        border: Border.all(
-                          color: const Color(0xFFD1D5DB),
-                          width: 2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: _selectedProfileImage != null
-                          ? Icon(
-                              _selectedProfileImage == 'camera'
-                                  ? Icons.camera_alt
-                                  : Icons.photo,
-                              size: screenWidth * 0.1,
-                              color: const Color(0xFF2E88F3),
-                            )
-                          : Column(
+                    child: CircleAvatar(
+                      radius: screenWidth * 0.18, // Make it larger
+                      backgroundColor: Colors.grey.shade200, // Background color
+                      // --- Show picked image or placeholder ---
+                      backgroundImage: _imageFile != null
+                          ? FileImage(
+                              File(_imageFile!.path),
+                            ) // Display selected File image
+                          : null, // No background image if no file
+                      child: _imageFile == null
+                          ? Column(
+                              // Placeholder icon/text
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
-                                  Icons.add_a_photo,
-                                  size: screenWidth * 0.08,
-                                  color: const Color(0xFFD1D5DB),
+                                  Icons.add_a_photo_outlined,
+                                  size: screenWidth * 0.1,
+                                  color: Colors.grey.shade400,
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
@@ -235,18 +317,19 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                                   style: TextStyle(
                                     fontFamily: 'NotoLoopedThaiUI',
                                     fontSize: screenWidth * 0.03,
-                                    color: const Color(0xFFD1D5DB),
+                                    color: Colors.grey.shade500,
                                   ),
                                 ),
                               ],
-                            ),
+                            )
+                          : null, // Don't show icon/text if image is selected
                     ),
                   ),
 
+                  // --- END UPDATED ---
                   SizedBox(height: screenHeight * 0.04),
-
-                  // Form Container
                   Container(
+                    // Form Container
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -262,7 +345,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Username Field
+                        // Username
                         Text(
                           'ชื่อผู้ใช้ *',
                           style: TextStyle(
@@ -276,19 +359,24 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         TextField(
                           controller: _usernameController,
                           onChanged: (_) => setState(() {}),
+                          textInputAction: TextInputAction.next,
                           decoration: InputDecoration(
-                            hintText: 'กรอกชื่อผู้ใช้',
+                            hintText: 'กรอกชื่อที่ต้องการให้แสดง',
                             hintStyle: TextStyle(
                               fontFamily: 'NotoLoopedThaiUI',
                               color: Colors.grey[400],
                             ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                              borderSide: BorderSide(color: Colors.grey[400]!),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                              borderSide: BorderSide(color: Colors.grey[400]!),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -297,16 +385,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                                 width: 2,
                               ),
                             ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
-                            ),
                           ),
                         ),
-
                         const SizedBox(height: 20),
-
-                        // Description Field
+                        // Description
                         Text(
                           'คำอธิบายเกี่ยวกับตัวคุณ',
                           style: TextStyle(
@@ -321,19 +403,24 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                           controller: _descriptionController,
                           maxLines: 3,
                           maxLength: 150,
+                          textInputAction: TextInputAction.done,
                           decoration: InputDecoration(
-                            hintText: 'เล่าเกี่ยวกับตัวคุณ (ไม่บังคับ)',
+                            hintText: 'เล่าเกี่ยวกับตัวคุณสั้นๆ (ไม่บังคับ)',
                             hintStyle: TextStyle(
                               fontFamily: 'NotoLoopedThaiUI',
                               color: Colors.grey[400],
                             ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                              borderSide: BorderSide(color: Colors.grey[400]!),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                              borderSide: BorderSide(color: Colors.grey[400]!),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -341,10 +428,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                                 color: Color(0xFF2E88F3),
                                 width: 2,
                               ),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
                             ),
                             counterStyle: const TextStyle(
                               fontFamily: 'NotoLoopedThaiUI',
@@ -355,17 +438,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       ],
                     ),
                   ),
-
                   SizedBox(height: screenHeight * 0.05),
-
-                  // Complete Setup Button
-                  CustomButton(
-                    text: 'สร้างโปรไฟล์',
-                    isEnabled: _isFormValid,
-                    onPressed: _completeSetup,
-                  ),
-
-                  SizedBox(height: screenHeight * 0.15),
+                  // Button
+                  if (_isLoading)
+                    const CircularProgressIndicator()
+                  else
+                    CustomButton(
+                      text: 'สร้างโปรไฟล์',
+                      isEnabled: _isFormValid,
+                      onPressed: _completeSetup,
+                    ),
                 ],
               ),
             ),
@@ -374,7 +456,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       ),
     );
   }
-
 
   @override
   void dispose() {

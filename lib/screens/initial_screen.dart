@@ -4,8 +4,8 @@ import '../widgets/logo_widget.dart';
 import '../widgets/background_circles.dart';
 import './login_screen.dart';
 
-class SplashScreen extends StatelessWidget {
-  const SplashScreen({super.key});
+class InitialScreen extends StatelessWidget {
+  const InitialScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +41,6 @@ class SplashScreen extends StatelessWidget {
             // Main content
             Column(
               children: [
-
                 SizedBox(height: screenHeight * 0.15),
 
                 // Logo and app name
@@ -104,7 +103,9 @@ class SplashScreen extends StatelessWidget {
                       print('Start button pressed');
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const LoginScreen()),
+                        MaterialPageRoute(
+                          builder: (context) => const LoginScreen(),
+                        ),
                       );
                     },
                   ),

@@ -1,5 +1,12 @@
+// lib/screens/otp_verification_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+// --- ADD THESE IMPORTS ---
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import './home_screen.dart'; // We need this to skip setup for old users
+// --- END IMPORTS ---
 import '../widgets/custom_button.dart';
 import '../widgets/logo_widget.dart';
 import '../widgets/background_circles.dart';
@@ -9,11 +16,14 @@ import './profile_setup_screen.dart';
 class OtpVerificationScreen extends StatefulWidget {
   final String phoneNumber;
   final String countryCode;
+  // --- We need the verificationId from the login screen ---
+  final String verificationId;
 
   const OtpVerificationScreen({
     super.key,
     required this.phoneNumber,
     required this.countryCode,
+    required this.verificationId, // <-- ADD THIS
   });
 
   @override
@@ -21,14 +31,17 @@ class OtpVerificationScreen extends StatefulWidget {
 }
 
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
-  final List<TextEditingController> _otpControllers = 
+  final List<TextEditingController> _otpControllers =
       List.generate(6, (index) => TextEditingController());
-  final List<FocusNode> _focusNodes = 
-      List.generate(6, (index) => FocusNode());
-  
+  final List<FocusNode> _focusNodes = List.generate(6, (index) => FocusNode());
+
   bool _isResendEnabled = false;
   int _resendCountdown = 60;
-  
+  bool _isLoading = false; // <-- Add loading state
+
+  // --- We need an instance of Firebase Auth ---
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
   @override
   void initState() {
     super.initState();
@@ -74,33 +87,90 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   }
 
   void _resendOtp() {
+    // We will implement this later. For now, just reset the timer.
     if (_isResendEnabled) {
       setState(() {
         _isResendEnabled = false;
         _resendCountdown = 60;
       });
       _startResendTimer();
-      
-      // Clear all OTP fields
       for (var controller in _otpControllers) {
         controller.clear();
       }
       _focusNodes[0].requestFocus();
-      
       print('Resending OTP to ${widget.countryCode}${widget.phoneNumber}');
+      // TODO: Add actual Firebase resend logic here
     }
   }
 
-  void _verifyOtp() {
-    if (_isOtpComplete) {
-      print('Verifying OTP: $_otpCode');
-      // Navigate to profile setup for first-time users
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const ProfileSetupScreen(),
-        ),
+  // --- THIS IS THE NEW, IMPORTANT FUNCTION ---
+  void _verifyOtp() async {
+    if (!_isOtpComplete) return;
+
+    setState(() {
+      _isLoading = true; // Start loading
+    });
+
+    try {
+      // 1. Create the credential to send to Firebase
+      final credential = PhoneAuthProvider.credential(
+        verificationId: widget.verificationId,
+        smsCode: _otpCode,
       );
+
+      // 2. Sign the user in
+      final authResult = await _auth.signInWithCredential(credential);
+      final User? user = authResult.user;
+
+      if (user != null) {
+        // 3. User is signed in! Now, check if they are a NEW or OLD user.
+        final db = FirebaseFirestore.instance;
+        final userDoc = await db.collection('users').doc(user.uid).get();
+
+        if (userDoc.exists) {
+          // --- OLD USER ---
+          // They already have a profile and role. Send them to Home.
+          if (mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+              (route) => false,
+            );
+          }
+        } else {
+          // --- NEW USER ---
+          // Create a basic profile for them, then send to Profile Setup.
+          await db.collection('users').doc(user.uid).set({
+            'uid': user.uid,
+            'phoneNumber': '${widget.countryCode}${widget.phoneNumber}',
+          });
+          
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ProfileSetupScreen(),
+              ),
+            );
+          }
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      // Handle errors (e.g., wrong OTP)
+      print('Firebase Auth Error: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('รหัส OTP ไม่ถูกต้อง กรุณาลองใหม่'),
+            backgroundColor: Colors.red),
+      );
+    } catch (e) {
+      print('General Error: $e');
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -112,20 +182,18 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       resizeToAvoidBottomInset: false,
-      body: SafeArea(   // ✅ wrapped entire body
+      body: SafeArea(
         child: Stack(
           children: [
-            // Background circles
+            // ... (Your background circles - no change)
             Positioned.fill(
               child: Stack(
                 children: [
-                  // Top circles
                   Positioned(
                     top: -screenHeight * 0.08,
                     left: -screenWidth * 0.34,
                     child: const TopBackgroundCircles(),
                   ),
-                  // Bottom circles
                   Positioned(
                     bottom: -screenHeight * 0.1,
                     left: -screenWidth * 0.2,
@@ -140,6 +208,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.1),
               child: Column(
                 children: [
+                  // ... (Your Logo, Title, and Description text - no change)
                   SizedBox(height: screenHeight * 0.1),
                   const LogoWidget(),
                   SizedBox(height: screenHeight * 0.03),
@@ -153,10 +222,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     ),
                   ),
                   SizedBox(height: screenHeight * 0.02),
-
-                  // Description text
                   Padding(
-                    padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.05),
+                    padding:
+                        EdgeInsets.symmetric(horizontal: screenWidth * 0.05),
                     child: RichText(
                       textAlign: TextAlign.center,
                       text: TextSpan(
@@ -179,10 +247,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       ),
                     ),
                   ),
-
                   SizedBox(height: screenHeight * 0.02),
-
-                  // OTP Input Fields
+                  // ... (Your OTP input container - no change)
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -204,7 +270,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                             return OtpInputField(
                               controller: _otpControllers[index],
                               focusNode: _focusNodes[index],
-                              onChanged: (value) => _onOtpChanged(index, value),
+                              onChanged: (value) =>
+                                  _onOtpChanged(index, value),
                               onBackspace: () => _onBackspace(index),
                             );
                           }),
@@ -212,10 +279,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       ],
                     ),
                   ),
-
                   SizedBox(height: screenHeight * 0.03),
-
-                  // Resend OTP section
+                  // ... (Your Resend OTP section - no change)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -249,14 +314,18 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       ),
                     ],
                   ),
-
                   SizedBox(height: screenHeight * 0.05),
-
-                  CustomButton(
-                    text: 'ยืนยัน',
-                    isEnabled: _isOtpComplete,
-                    onPressed: _verifyOtp,
-                  ),
+                  
+                  // --- UPDATED CustomButton ---
+                  // It now shows a loading indicator
+                  if (_isLoading)
+                    const CircularProgressIndicator()
+                  else
+                    CustomButton(
+                      text: 'ยืนยัน',
+                      isEnabled: _isOtpComplete,
+                      onPressed: _verifyOtp,
+                    ),
 
                   SizedBox(height: screenHeight * 0.2),
                 ],
