@@ -291,12 +291,11 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         taskTypeString = 'habit_schedule';
         taskSpecificData = {
           'assignedTo': assignedTo,
-          // IMPORTANT: Include the potentially updated schedule ONLY when saving an EDIT
-          if (widget.isEditing) 'schedule': _habitSchedule,
+          // IMPORTANT: Include the potentially updated schedule
+          'schedule': _habitSchedule,
         };
-        // Add schedule and history only when CREATING
+        // Add completionHistory only when CREATING
         if (!widget.isEditing) {
-          taskSpecificData['schedule'] = _habitSchedule;
           taskSpecificData['completionHistory'] = {};
         }
         break;
@@ -331,8 +330,22 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
       if (widget.isEditing) {
         // --- UPDATE ---
-        // Do NOT update type, creator, creation time, or status here
-        // Status is updated via completion logic
+        // Don't update fields that shouldn't change
+        dataToSave.remove('groupId');
+
+        // Remove creation/status fields if they accidentally got in
+        dataToSave.remove('createdBy');
+        dataToSave.remove('createdAt');
+        dataToSave.remove('status');
+        dataToSave.remove('taskType'); // Type cannot be changed
+
+        // Don't overwrite completionHistory when editing main details
+        if (_selectedType == TaskType.habit) {
+          // 'schedule' is included, which is correct
+        } else {
+          dataToSave.remove('schedule');
+          dataToSave.remove('completionHistory');
+        }
 
         print("Updating task ${widget.taskId} with data: $dataToSave");
         await taskDocRef.update(dataToSave);
@@ -346,9 +359,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         dataToSave['taskType'] = taskTypeString; // Set type only on creation
 
         print("Adding new task with data: $dataToSave");
-        await taskDocRef.set(
-          dataToSave,
-        ); // Use set to allow specifying ID if needed
+        await taskDocRef.set(dataToSave);
       }
 
       if (mounted) {
@@ -382,10 +393,12 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      resizeToAvoidBottomInset:
-          false, // Keep false if SingleChildScrollView handles it
+      // --- UPDATE: Use resizeToAvoidBottomInset: true ---
+      // This is the default and works best with SingleChildScrollView
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: const Color(0xFFF9FAFB),
         elevation: 0,
@@ -407,101 +420,131 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         child: Stack(
           children: [
             Positioned(
-              bottom: -screenWidth * 0.5,
+              bottom: -screenWidth * 0.5, // Keep low
               left: -screenWidth * 0.25,
               child: const BottomBackgroundCircles(),
             ),
-            Padding(
-              padding: EdgeInsets.only(
-                left: screenWidth * 0.1,
-                right: screenWidth * 0.1,
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    SizedBox(height: screenWidth * 0.05),
-                    // Task Type Selector (disabled when editing)
-                    AbsorbPointer(
-                      absorbing: widget.isEditing,
-                      child: Opacity(
-                        opacity: widget.isEditing ? 0.5 : 1.0,
-                        child: SegmentedButton<TaskType>(
-                          segments: const [
-                            ButtonSegment(
-                              value: TaskType.appointment,
-                              label: Text(
-                                'นัดหมาย',
-                                style: TextStyle(
-                                  fontFamily: 'NotoLoopedThaiUI',
+
+            // --- UPDATE: Use LayoutBuilder + ConstrainedBox ---
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return Padding(
+                  padding: EdgeInsets.only(
+                    left: screenWidth * 0.1,
+                    right: screenWidth * 0.1,
+                    // Use keyboard padding here
+                    bottom: MediaQuery.of(context).viewInsets.bottom,
+                  ),
+                  child: SingleChildScrollView(
+                    child: ConstrainedBox(
+                      // Force the column to be AT LEAST as tall as the viewport
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment
+                            .spaceBetween, // Push content and button apart
+                        children: [
+                          // --- Top Content Column ---
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            children: [
+                              SizedBox(height: screenWidth * 0.05),
+                              // Task Type Selector (disabled when editing)
+                              AbsorbPointer(
+                                absorbing: widget.isEditing,
+                                child: Opacity(
+                                  opacity: widget.isEditing ? 0.5 : 1.0,
+                                  child: SegmentedButton<TaskType>(
+                                    // --- REPLACED SEGMENTS ---
+                                    segments: const [
+                                      ButtonSegment(
+                                        value: TaskType.appointment,
+                                        // Only show the icon, wrapped in a Tooltip
+                                        icon: Tooltip(
+                                          message:
+                                              'นัดหมาย', // Text appears on long-press
+                                          child: Icon(Icons.event_available),
+                                        ),
+                                        // Remove the 'label' property
+                                      ),
+                                      ButtonSegment(
+                                        value: TaskType.countdown,
+                                        icon: Tooltip(
+                                          message: 'นับถอยหลัง',
+                                          child: Icon(Icons.hourglass_bottom),
+                                        ),
+                                        // Remove the 'label' property
+                                      ),
+                                      ButtonSegment(
+                                        value: TaskType.habit,
+                                        icon: Tooltip(
+                                          message: 'กิจวัตร',
+                                          child: Icon(Icons.calendar_month),
+                                        ),
+                                        // Remove the 'label' property
+                                      ),
+                                    ],
+                                    // --- END REPLACEMENT ---
+                                    selected: {_selectedType},
+                                    onSelectionChanged: widget.isEditing
+                                        ? null
+                                        : (Set<TaskType> newSelection) {
+                                            setState(() {
+                                              _selectedType =
+                                                  newSelection.first;
+                                              if (_selectedType ==
+                                                      TaskType.habit &&
+                                                  _habitSchedule.isEmpty) {
+                                                for (int i = 1; i <= 7; i++) {
+                                                  _habitSchedule.putIfAbsent(
+                                                    i.toString(),
+                                                    () => [],
+                                                  );
+                                                }
+                                              }
+                                            });
+                                          },
+                                  ),
                                 ),
                               ),
-                              icon: Icon(Icons.event_available),
+                              SizedBox(height: screenWidth * 0.05),
+                              _buildForm(screenWidth), // Main form section
+                              // Member Picker (shown for appointments and habits)
+                              if (_selectedType == TaskType.appointment ||
+                                  _selectedType == TaskType.habit) ...[
+                                SizedBox(height: screenWidth * 0.05),
+                                _buildMemberPicker(screenWidth),
+                              ],
+                            ],
+                          ),
+                          // --- End Top Content ---
+
+                          // --- Bottom Button Column ---
+                          Padding(
+                            padding: EdgeInsets.only(
+                              top: screenWidth * 0.08, // Space above button
+                              bottom: screenWidth * 0.1, // Bottom padding
                             ),
-                            ButtonSegment(
-                              value: TaskType.countdown,
-                              label: Text(
-                                'นับถอยหลัง',
-                                style: TextStyle(
-                                  fontFamily: 'NotoLoopedThaiUI',
-                                ),
-                              ),
-                              icon: Icon(Icons.hourglass_bottom),
-                            ),
-                            ButtonSegment(
-                              value: TaskType.habit,
-                              label: Text(
-                                'กิจวัตร',
-                                style: TextStyle(
-                                  fontFamily: 'NotoLoopedThaiUI',
-                                ),
-                              ),
-                              icon: Icon(Icons.calendar_month),
-                            ),
-                          ],
-                          selected: {_selectedType},
-                          onSelectionChanged: widget.isEditing
-                              ? null
-                              : (Set<TaskType> newSelection) {
-                                  setState(() {
-                                    _selectedType = newSelection.first;
-                                    if (_selectedType == TaskType.habit &&
-                                        _habitSchedule.isEmpty) {
-                                      for (int i = 1; i <= 7; i++) {
-                                        _habitSchedule.putIfAbsent(
-                                          i.toString(),
-                                          () => [],
-                                        );
-                                      }
-                                    }
-                                  });
-                                },
-                        ),
+                            child: _isSaving
+                                ? const CircularProgressIndicator()
+                                : CustomButton(
+                                    text: widget.isEditing
+                                        ? 'อัปเดตงาน'
+                                        : 'บันทึกงาน',
+                                    isEnabled: true,
+                                    onPressed: _saveTask,
+                                  ),
+                          ),
+                          // --- End Bottom Button ---
+                        ],
                       ),
                     ),
-                    SizedBox(height: screenWidth * 0.05),
-                    _buildForm(screenWidth), // Main form section
-                    // Member Picker (shown for appointments and habits)
-                    if (_selectedType == TaskType.appointment ||
-                        _selectedType == TaskType.habit) ...[
-                      SizedBox(height: screenWidth * 0.05),
-                      _buildMemberPicker(screenWidth),
-                    ],
-                    SizedBox(height: screenWidth * 0.08),
-                    // Save/Update Button
-                    if (_isSaving)
-                      const CircularProgressIndicator()
-                    else
-                      CustomButton(
-                        text: widget.isEditing ? 'อัปเดตงาน' : 'บันทึกงาน',
-                        isEnabled: true,
-                        onPressed: _saveTask,
-                      ),
-                    SizedBox(height: screenWidth * 0.1), // Bottom padding
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
+            // --- END UPDATE ---
           ],
         ),
       ),
@@ -526,7 +569,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Common Fields: Title, Description
+          // Common Fields
           _buildTextField(
             label: 'ชื่อ *',
             controller: _titleController,
@@ -549,14 +592,18 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             Wrap(
               spacing: 16.0, // Horizontal space between items
               runSpacing: 16.0, // Vertical space if items wrap
+              alignment: WrapAlignment.center, // Center the items
               children: [
                 // Date Picker (Constrained width)
                 SizedBox(
-                  // Calculate approximate width for two items with spacing
-                  // Container padding (24*2=48), Wrap spacing (16)
+                  // Calculate width.
+                  // 24*2=48 (Container padding)
+                  // 16 (Wrap spacing)
+                  // 0.8 (Screen padding)
+                  // Divide by 2
                   width:
                       (screenWidth * 0.8 - 48 - 16) /
-                      2, // Adjust if padding/margins change
+                      2.1, // Use 2.1 or 2.2 for safety
                   child: _buildDateTimePicker(
                     label: 'วันที่',
                     text: _selectedDate == null
@@ -571,7 +618,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 SizedBox(
                   width:
                       (screenWidth * 0.8 - 48 - 16) /
-                      2, // Adjust if padding/margins change
+                      2.1, // Use 2.1 or 2.2 for safety
                   child: _buildDateTimePicker(
                     label: 'เวลา',
                     text: _selectedTime == null
@@ -615,7 +662,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 ),
               ),
             ),
-            // Show summary of how many items are scheduled
+            // Show summary
             if (_habitSchedule.isNotEmpty &&
                 _habitSchedule.values.any((list) => list.isNotEmpty)) ...[
               const SizedBox(height: 10),
@@ -744,7 +791,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // --- Wrap the Text with Expanded ---
                 Expanded(
                   child: Text(
                     text,
@@ -752,13 +798,11 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                       fontFamily: 'NotoLoopedThaiUI',
                       fontSize: 16,
                     ),
-                    overflow: TextOverflow
-                        .ellipsis, // Prevent overflow if text is extremely long
                     maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                // --- END WRAP ---
-                const SizedBox(width: 8), // Add a little space before the icon
+                const SizedBox(width: 8), // Add a small gap
                 const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
               ],
             ),

@@ -11,6 +11,7 @@ import './settings_screen.dart';
 import './create_group_screen.dart';
 import './join_group_screen.dart';
 import './group_detail_screen.dart'; // <-- Make sure this is imported
+import '../widgets/custom_fade_route.dart';
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
@@ -79,14 +80,11 @@ class _GroupsScreenState extends State<GroupsScreen> {
     setState(() => _selectedIndex = index);
 
     if (index == 1) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+      Navigator.pushReplacement(context, FadeRoute(child: const HomeScreen()));
     } else if (index == 2) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const SettingsScreen()),
+        FadeRoute(child: const SettingsScreen()),
       );
     }
   }

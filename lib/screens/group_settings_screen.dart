@@ -31,9 +31,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   String? _groupImageUrl;
   String? _inviteCode;
   List<Map<String, dynamic>> _membersData = [];
-  // --- NEW: State for pending requests ---
   List<Map<String, dynamic>> _pendingMembersData = [];
-  // --- END NEW ---
 
   // Current User State
   String _currentUserId = '';
@@ -48,9 +46,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   bool _isUploadingImage = false;
   bool _isDeletingGroup = false;
 
-  // --- NEW: Cache usernames to avoid re-fetching ---
   final Map<String, Map<String, dynamic>> _userCache = {};
-  // --- END NEW ---
 
   @override
   void initState() {
@@ -59,7 +55,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     _fetchGroupAndUserData();
   }
 
-  // --- UPDATED: Fetches pending requests as well ---
   Future<void> _fetchGroupAndUserData() async {
     setState(() {
       _isLoadingGroupData = true;
@@ -77,7 +72,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           .doc(_currentUserId)
           .get();
       if (userDoc.exists && mounted) {
-        // Cache current user
         _userCache[_currentUserId] = userDoc.data()!;
       }
 
@@ -97,22 +91,25 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           (data['members'] as List?)?.cast<String>() ?? [];
       final List<String> pendingIds =
           (data['pendingRequests'] as List?)?.cast<String>() ?? [];
-      _isCurrentUserGroupCaretaker = false; // Reset
+      _isCurrentUserGroupCaretaker = false;
 
-      // Find all unique IDs we need to fetch
       final allIdsToFetch = {...memberIds, ...pendingIds}.toList();
-      await _fetchUsernames(allIdsToFetch); // Fetch and cache all users
+      // --- Fetch user data for all members/pending, including potential ghosts ---
+      // (Ghosts won't be in the result, which is fine)
+      await _fetchUsernames(allIdsToFetch);
 
       final List<Map<String, dynamic>> fetchedMembersData = [];
       final List<Map<String, dynamic>> fetchedPendingData = [];
 
       // Process members
       for (String memberId in memberIds) {
-        final memberData = _userCache[memberId];
+        final memberData = _userCache[memberId]; // Get from cache
         final memberRole = memberData?['role'] ?? 'unknown';
         fetchedMembersData.add({
           'uid': memberId,
-          'username': memberData?['username'] ?? 'กำลังโหลด...',
+          // If memberData is null (ghost user), show a fallback
+          'username':
+              memberData?['username'] ?? 'ผู้ใช้ที่ถูกลบ', // "Deleted User"
           'role': memberRole,
           'profilePicUrl': memberData?['profilePicUrl'],
         });
@@ -124,12 +121,16 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       // Process pending requests
       for (String memberId in pendingIds) {
         final memberData = _userCache[memberId];
-        fetchedPendingData.add({
-          'uid': memberId,
-          'username': memberData?['username'] ?? 'กำลังโหลด...',
-          'role': memberData?['role'] ?? 'unknown',
-          'profilePicUrl': memberData?['profilePicUrl'],
-        });
+        // If a pending user deleted their account, they just won't show up here
+        // which is fine. Or show fallback:
+        if (memberData != null) {
+          fetchedPendingData.add({
+            'uid': memberId,
+            'username': memberData['username'] ?? 'กำลังโหลด...',
+            'role': memberData['role'] ?? 'unknown',
+            'profilePicUrl': memberData['profilePicUrl'],
+          });
+        }
       }
 
       fetchedMembersData.sort((a, b) => a['role'] == 'caretaker' ? -1 : 1);
@@ -154,7 +155,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     }
   }
 
-  // --- NEW: Helper to fetch and cache user data ---
   Future<void> _fetchUsernames(List<String> userIds) async {
     List<String> idsToFetch = [];
     for (String id in userIds.toSet()) {
@@ -163,9 +163,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       }
     }
     if (idsToFetch.isEmpty) return;
-
     try {
-      // Fetch in batches of 10
       for (var i = 0; i < idsToFetch.length; i += 10) {
         var batchIds = idsToFetch.sublist(
           i,
@@ -177,14 +175,13 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
             .where(FieldPath.documentId, whereIn: batchIds)
             .get();
         for (var doc in querySnapshot.docs) {
-          _userCache[doc.id] = doc.data(); // Cache the full data map
+          _userCache[doc.id] = doc.data();
         }
       }
     } catch (e) {
       print("Error batch fetching usernames: $e");
     }
   }
-  // --- END NEW HELPER ---
 
   // --- Image Handling ---
   Future<void> _pickGroupImage(ImageSource source) async {
@@ -500,7 +497,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     );
   }
 
-  // --- NEW: Remove Member Logic ---
+  // --- Remove Member Logic ---
   void _showRemoveMemberDialog(String memberId, String username) {
     /* ... (unchanged) ... */
     if (!_isCurrentUserGroupCaretaker || memberId == _currentUserId) return;
@@ -541,7 +538,53 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     );
   }
 
+  // --- UPDATED: Remove Member Logic ---
   Future<void> _removeMember(String memberId) async {
+    if (!_isCurrentUserGroupCaretaker) return;
+    setState(() {
+      _isLoadingGroupData = true;
+    }); // Show loading
+    try {
+      final db = FirebaseFirestore.instance;
+
+      // 1. Check if the user document exists
+      final userRef = db.collection('users').doc(memberId);
+      final userDoc = await userRef.get();
+
+      // 2. Prepare batch write
+      final batch = db.batch();
+      final groupRef = db.collection('groups').doc(widget.groupId);
+
+      // 3. ALWAYS remove member from the group's 'members' list
+      batch.update(groupRef, {
+        'members': FieldValue.arrayRemove([memberId]),
+      });
+
+      // 4. ONLY update the user's document if it still exists
+      if (userDoc.exists) {
+        batch.update(userRef, {
+          'joinedGroups': FieldValue.arrayRemove([widget.groupId]),
+        });
+      } else {
+        print("User $memberId document not found. Skipping user update.");
+      }
+
+      // 5. Commit the batch
+      await batch.commit();
+
+      _fetchGroupAndUserData(); // Refresh list (this will stop loading state)
+    } catch (e) {
+      _handleError("Error removing member", e);
+      if (mounted)
+        setState(() {
+          _isLoadingGroupData = false;
+        });
+    }
+  }
+  // --- END UPDATED LOGIC ---
+
+  // --- Accept/Deny Logic ---
+  Future<void> _acceptMember(String memberId) async {
     /* ... (unchanged) ... */
     if (!_isCurrentUserGroupCaretaker) return;
     setState(() {
@@ -551,47 +594,16 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       final db = FirebaseFirestore.instance;
       final batch = db.batch();
       final groupRef = db.collection('groups').doc(widget.groupId);
-      batch.update(groupRef, {
-        'members': FieldValue.arrayRemove([memberId]),
-      });
       final userRef = db.collection('users').doc(memberId);
-      batch.update(userRef, {
-        'joinedGroups': FieldValue.arrayRemove([widget.groupId]),
-      });
-      await batch.commit();
-      _fetchGroupAndUserData();
-    } catch (e) {
-      _handleError("Error removing member", e);
-      if (mounted)
-        setState(() {
-          _isLoadingGroupData = false;
-        });
-    }
-  }
-
-  // --- NEW: Accept/Deny Logic ---
-  Future<void> _acceptMember(String memberId) async {
-    if (!_isCurrentUserGroupCaretaker) return;
-    setState(() {
-      _isLoadingGroupData = true;
-    }); // Re-use loading state
-    try {
-      final db = FirebaseFirestore.instance;
-      final batch = db.batch();
-      final groupRef = db.collection('groups').doc(widget.groupId);
-      final userRef = db.collection('users').doc(memberId);
-
-      // 1. Add to 'members', remove from 'pendingRequests'
       batch.update(groupRef, {
         'members': FieldValue.arrayUnion([memberId]),
         'pendingRequests': FieldValue.arrayRemove([memberId]),
       });
-      // 2. Add group to user's 'joinedGroups'
       batch.update(userRef, {
         'joinedGroups': FieldValue.arrayUnion([widget.groupId]),
       });
       await batch.commit();
-      _fetchGroupAndUserData(); // Refresh list
+      _fetchGroupAndUserData();
     } catch (e) {
       _handleError("Error accepting member", e);
       if (mounted)
@@ -602,19 +614,19 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   }
 
   Future<void> _denyMember(String memberId) async {
+    /* ... (unchanged) ... */
     if (!_isCurrentUserGroupCaretaker) return;
     setState(() {
       _isLoadingGroupData = true;
     });
     try {
-      // Just remove them from the pending list
       await FirebaseFirestore.instance
           .collection('groups')
           .doc(widget.groupId)
           .update({
             'pendingRequests': FieldValue.arrayRemove([memberId]),
           });
-      _fetchGroupAndUserData(); // Refresh list
+      _fetchGroupAndUserData();
     } catch (e) {
       _handleError("Error denying member", e);
       if (mounted)
@@ -623,7 +635,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         });
     }
   }
-  // --- END NEW Accept/Deny Logic ---
 
   void _handleError(String contextMessage, dynamic error) {
     /* ... (unchanged) ... */
@@ -643,8 +654,8 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ... (Build method remains unchanged, including centered QR code and fancy member list) ...
     final screenWidth = MediaQuery.of(context).size.width;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(title: Text(_groupName ?? 'ตั้งค่ากลุ่ม')),
@@ -656,10 +667,9 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
               left: -screenWidth * 0.25,
               child: const BottomBackgroundCircles(),
             ),
-            // Show main loading indicator
             if (_isLoadingGroupData &&
                 _pendingMembersData.isEmpty &&
-                _membersData.isEmpty) // Only show full-screen load on initial
+                _membersData.isEmpty)
               const Center(child: CircularProgressIndicator())
             else
               RefreshIndicator(
@@ -672,7 +682,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Group Image Section
                       Center(
                         child: Stack(
                           alignment: Alignment.bottomRight,
@@ -740,8 +749,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-
-                      // Group Name/Description Section
                       _buildInfoSection(
                         label: 'ชื่อกลุ่ม',
                         value: _groupName ?? '...',
@@ -774,25 +781,21 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                       ),
                       const SizedBox(height: 24),
 
-                      // --- NEW: Pending Requests Section ---
+                      // --- Pending Requests Section ---
                       if (_isCurrentUserGroupCaretaker &&
                           _pendingMembersData.isNotEmpty) ...[
                         _buildPendingRequestsList(screenWidth),
                         const SizedBox(height: 24),
                       ],
-                      // --- END NEW ---
 
-                      // Invite Code Section
                       if (_isCurrentUserGroupCaretaker) ...[
                         Center(child: _buildInviteCodeSection(screenWidth)),
                         const SizedBox(height: 24),
                       ],
 
-                      // Members List Section
                       _buildMembersList(screenWidth),
                       const SizedBox(height: 24),
 
-                      // Delete Button
                       if (_isCurrentUserGroupCaretaker)
                         Center(
                           child: TextButton.icon(
@@ -828,7 +831,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                   ),
                 ),
               ),
-            // Show a small loading indicator at top if refreshing/acting
             if (_isLoadingGroupData &&
                 (_pendingMembersData.isNotEmpty || _membersData.isNotEmpty))
               Positioned(
@@ -846,7 +848,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     );
   }
 
-  // Helper for Name/Description
   Widget _buildInfoSection({
     required String label,
     required String value,
@@ -906,7 +907,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     );
   }
 
-  // Centered Invite Code Section
   Widget _buildInviteCodeSection(double screenWidth) {
     /* ... (unchanged) ... */
     if (_inviteCode == null) return const SizedBox.shrink();
@@ -967,12 +967,12 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     );
   }
 
-  // --- NEW: Pending Requests List ---
+  // --- Pending Requests List ---
   Widget _buildPendingRequestsList(double screenWidth) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       decoration: BoxDecoration(
-        color: Colors.yellow.shade50, // Highlight color
+        color: Colors.yellow.shade50,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.orange.shade200),
       ),
@@ -998,7 +998,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
             itemBuilder: (context, index) {
               final member = _pendingMembersData[index];
               final profilePicUrl = member['profilePicUrl'] as String?;
-
               return ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
@@ -1024,19 +1023,15 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                subtitle: _buildFancyRole(
-                  member['role'] == 'caretaker',
-                ), // Show their role
+                subtitle: _buildFancyRole(member['role'] == 'caretaker'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Deny Button
                     IconButton(
                       icon: Icon(Icons.close, color: Colors.red.shade400),
                       tooltip: 'ปฏิเสธ',
                       onPressed: () => _denyMember(member['uid']),
                     ),
-                    // Accept Button
                     IconButton(
                       icon: Icon(Icons.check, color: Colors.green.shade600),
                       tooltip: 'อนุมัติ',
@@ -1051,9 +1046,8 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       ),
     );
   }
-  // --- END NEW ---
 
-  // --- UPDATED: Member List with fancy roles and kick button ---
+  // --- Members List (with kick button) ---
   Widget _buildMembersList(double screenWidth) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
@@ -1126,10 +1120,8 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                subtitle: _buildFancyRole(isCaretaker), // Use fancy role
-                trailing:
-                    (_isCurrentUserGroupCaretaker &&
-                        !isSelf) // Show kick button if user is admin AND it's not themselves
+                subtitle: _buildFancyRole(isCaretaker),
+                trailing: (_isCurrentUserGroupCaretaker && !isSelf)
                     ? IconButton(
                         icon: Icon(
                           Icons.remove_circle_outline,
@@ -1141,7 +1133,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                           member['username'],
                         ),
                       )
-                    : null, // No button for self or if not an admin
+                    : null,
               );
             },
           ),
@@ -1150,7 +1142,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     );
   }
 
-  // --- NEW: Fancy Role Widget ---
+  // --- Fancy Role Widget ---
   Widget _buildFancyRole(bool isCaretaker) {
     final Color color = isCaretaker
         ? const Color(0xFF2E88F3)
@@ -1161,23 +1153,23 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     final String text = isCaretaker ? 'ผู้ดูแล' : 'ผู้รับการดูแล';
 
     return Container(
-      margin: const EdgeInsets.only(top: 4), // Add margin on top
+      margin: const EdgeInsets.only(top: 4),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.15),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min, // Don't take full width
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color), // Darker icon
+          Icon(icon, size: 14, color: color),
           const SizedBox(width: 4),
           Text(
             text,
             style: TextStyle(
               fontFamily: 'NotoLoopedThaiUI',
               fontSize: 12,
-              color: color, // Darker text
+              color: color,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1185,5 +1177,4 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       ),
     );
   }
-  // --- END NEW WIDGET ---
 } // End of _GroupSettingsScreenState

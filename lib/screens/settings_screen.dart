@@ -11,6 +11,7 @@ import './groups_screen.dart';
 import './home_screen.dart';
 import './terms_screen.dart';
 import './help_screen.dart';
+import '../widgets/custom_fade_route.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -29,13 +30,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (index == 0) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const GroupsScreen()),
+        FadeRoute(child: const GroupsScreen()),
       );
     } else if (index == 1) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+      Navigator.pushReplacement(context, FadeRoute(child: const HomeScreen()));
     }
   }
 

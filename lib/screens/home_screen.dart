@@ -11,6 +11,7 @@ import '../widgets/custom_button.dart';
 import './groups_screen.dart';
 import './settings_screen.dart';
 import './login_screen.dart';
+import '../widgets/custom_fade_route.dart';
 // Removed GroupDetailScreen import as it's not directly needed here
 
 class HomeScreen extends StatefulWidget {
@@ -209,15 +210,16 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onItemTapped(int index) {
     if (index == _selectedIndex) return;
     setState(() => _selectedIndex = index);
+
     if (index == 0) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const GroupsScreen()),
+        FadeRoute(child: const GroupsScreen()), // <-- THAT'S IT!
       );
     } else if (index == 2) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const SettingsScreen()),
+        FadeRoute(child: const SettingsScreen()), // <-- THAT'S IT!
       );
     }
   }
@@ -1829,6 +1831,49 @@ class _HomeScreenState extends State<HomeScreen> {
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBottomAppBarItem({
+    required int index,
+    required IconData icon,
+    required String label,
+    required double screenWidth,
+  }) {
+    final isSelected = (_selectedIndex == index);
+    final Color activeColor = const Color(0xFF2E88F3);
+    final Color inactiveColor = const Color(0xFF9CA3AF);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _onItemTapped(index),
+        borderRadius: BorderRadius.circular(20), // Rounded tap area
+        child: Container(
+          // Make the tap area bigger
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 24,
+                color: isSelected ? activeColor : inactiveColor,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'NotoLoopedThaiUI',
+                  fontSize: screenWidth * 0.03,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: isSelected ? activeColor : inactiveColor,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
