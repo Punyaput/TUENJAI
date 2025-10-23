@@ -596,6 +596,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                         isEnabled: _isFormValid,
                         onPressed: _saveProfile,
                       ),
+
+                    SizedBox(height: screenHeight * 0.13),
                   ],
                 ),
               ),

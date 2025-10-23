@@ -6,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/background_circles.dart';
-import './qr_scanner_screen.dart'; // <-- IMPORT THE NEW SCREEN
+import './qr_scanner_screen.dart';
 
 class JoinGroupScreen extends StatefulWidget {
   const JoinGroupScreen({super.key});
@@ -20,43 +20,34 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
   bool _isLoading = false;
 
   bool get _isFormValid {
-    return _codeController.text.trim().length == 6 && !_isLoading;
+    // --- UPDATED: Check for 8 characters ---
+    return _codeController.text.trim().length == 8 && !_isLoading;
   }
 
-  // --- NEW FUNCTION to open the scanner ---
   Future<void> _scanQRCode() async {
     try {
-      // Navigate to the scanner screen and wait for a result
       final result = await Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const QrScannerScreen()),
       );
-
-      // When it comes back, check if we got a code
       if (result != null && result is String) {
-        // Put the scanned code into the text field
         _codeController.text = result;
-        // Trigger a state update to enable the button
         setState(() {});
-
-        // --- For better UX, let's automatically try to join ---
-        if (_isFormValid) {
-          _joinGroupWithCode();
+        if (_codeController.text.trim().length == 8) {
+          // Check for 8
+          _joinGroupWithCode(); // Auto-submit if 8 chars
         }
       }
     } catch (e) {
       print('Error scanning code: $e');
     }
   }
-  // --- END NEW FUNCTION ---
 
+  // --- UPDATED: This function now SENDS A REQUEST ---
   Future<void> _joinGroupWithCode() async {
-    if (!_isFormValid) {
-      // Manually check if the code is not 6 digits, in case of scan error
-      if (_codeController.text.trim().length != 6) {
-        _showError("รหัสเข้าร่วมต้องมี 6 ตัวอักษร");
-        return;
-      }
+    if (_codeController.text.trim().length != 8) {
+      _showError("รหัสเข้าร่วมต้องมี 8 ตัวอักษร");
+      return;
     }
 
     setState(() {
@@ -65,16 +56,17 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception("User not logged in.");
-      }
+      if (user == null) throw Exception("User not logged in.");
 
       final db = FirebaseFirestore.instance;
-      final enteredCode = _codeController.text.trim().toUpperCase();
+      final enteredCode = _codeController.text
+          .trim()
+          .toUpperCase(); // Still uppercase for consistency? Or just trim() if using case-sensitive
 
+      // 1. Find group with this code
       final querySnapshot = await db
           .collection('groups')
-          .where('inviteCode', isEqualTo: enteredCode)
+          .where('inviteCode', isEqualTo: enteredCode) // Use exact code
           .limit(1)
           .get();
 
@@ -84,23 +76,37 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
 
       final groupDoc = querySnapshot.docs.first;
       final groupId = groupDoc.id;
+      final groupData = groupDoc.data();
 
-      // --- NEW CHECK: Don't let them join a group they are already in ---
-      final List<dynamic> currentMembers = groupDoc.data()['members'] ?? [];
+      // 2. Check if already a member or pending
+      final List<dynamic> currentMembers = groupData['members'] ?? [];
       if (currentMembers.contains(user.uid)) {
         throw Exception("คุณเป็นสมาชิกของกลุ่มนี้อยู่แล้ว");
       }
-      // --- END NEW CHECK ---
+      final List<dynamic> pendingRequests = groupData['pendingRequests'] ?? [];
+      if (pendingRequests.contains(user.uid)) {
+        throw Exception("คุณได้ส่งคำขอเข้าร่วมกลุ่มนี้ไปแล้ว");
+      }
 
+      // --- 3. THIS IS THE CHANGE ---
+      // Add user to the 'pendingRequests' list instead of 'members'
       await db.collection('groups').doc(groupId).update({
-        'members': FieldValue.arrayUnion([user.uid]),
+        'pendingRequests': FieldValue.arrayUnion([user.uid]),
       });
 
-      await db.collection('users').doc(user.uid).update({
-        'joinedGroups': FieldValue.arrayUnion([groupId]),
-      });
+      // 4. Do NOT add group to user's 'joinedGroups' yet.
 
       if (mounted) {
+        // 5. Show success and pop
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'ส่งคำขอเข้าร่วมกลุ่มแล้ว',
+              style: TextStyle(fontFamily: 'NotoLoopedThaiUI'),
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
         Navigator.pop(context);
       }
     } catch (e) {
@@ -133,23 +139,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFF9FAFB),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF374151)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'เข้าร่วมกลุ่ม',
-          style: TextStyle(
-            fontFamily: 'NotoLoopedThaiUI',
-            color: Color(0xFF374151),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('เข้าร่วมกลุ่ม')),
       body: SafeArea(
         child: Stack(
           children: [
@@ -163,9 +153,8 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
               child: Column(
                 children: [
                   SizedBox(height: screenHeight * 0.05),
-
-                  // --- NEW "SCAN" BUTTON ---
                   GestureDetector(
+                    /* ... (Scan QR Button is unchanged) ... */
                     onTap: _scanQRCode,
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 20),
@@ -204,10 +193,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                       ),
                     ),
                   ),
-
-                  // --- END NEW BUTTON ---
                   SizedBox(height: screenHeight * 0.03),
-
                   Text(
                     '— หรือ —',
                     style: TextStyle(
@@ -215,11 +201,10 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                       color: Colors.grey[500],
                     ),
                   ),
-
                   SizedBox(height: screenHeight * 0.03),
 
-                  // --- This is your existing "Enter Code" box ---
                   Container(
+                    // --- Enter Code Box ---
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -236,7 +221,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'ป้อนรหัสเข้าร่วม (6 ตัว)',
+                          'ป้อนรหัสเข้าร่วม (8 ตัว)', // <-- Updated text
                           style: TextStyle(
                             fontFamily: 'NotoLoopedThaiUI',
                             fontSize: screenWidth * 0.04,
@@ -248,17 +233,17 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                         TextField(
                           controller: _codeController,
                           onChanged: (_) => setState(() {}),
+                          maxLength: 8, // <-- Updated length
                           inputFormatters: [
-                            LengthLimitingTextInputFormatter(6),
-                            TextInputFormatter.withFunction(
-                              (oldValue, newValue) => newValue.copyWith(
-                                text: newValue.text.toUpperCase(),
-                                selection: newValue.selection,
-                              ),
-                            ),
+                            LengthLimitingTextInputFormatter(
+                              8,
+                            ), // <-- Updated length
+                            // Allow all chars, or just alphanumeric?
+                            // FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
                           ],
                           decoration: InputDecoration(
-                            hintText: 'ABC123',
+                            counterText: '', // Hide counter
+                            hintText: 'ABC123XY', // <-- Updated hint
                             hintStyle: TextStyle(
                               fontFamily: 'NotoLoopedThaiUI',
                               color: Colors.grey[400],
@@ -280,15 +265,16 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                   ),
                   SizedBox(height: screenHeight * 0.05),
 
-                  // Join Button
                   if (_isLoading)
                     const CircularProgressIndicator()
                   else
                     CustomButton(
-                      text: 'เข้าร่วมกลุ่ม',
+                      text: 'ส่งคำขอเข้าร่วม', // <-- Updated text
                       isEnabled: _isFormValid,
                       onPressed: _joinGroupWithCode,
                     ),
+
+                  SizedBox(height: screenHeight * 0.39),
                 ],
               ),
             ),

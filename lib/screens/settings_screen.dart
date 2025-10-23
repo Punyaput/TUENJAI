@@ -285,24 +285,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       body: SafeArea(
+        // SafeArea handles notches/system bars
         child: Stack(
           children: [
+            // Background circles
             Positioned(
               bottom: -screenWidth * 0.5,
               left: -screenWidth * 0.25,
               child: const BottomBackgroundCircles(),
             ),
-            Padding(
-              padding: EdgeInsets.only(
-                left: screenWidth * 0.06,
-                right: screenWidth * 0.06,
-                top: screenHeight * 0.04,
-                bottom: 100,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
+
+            // --- RESTRUCTURED CONTENT ---
+            // Main Column takes all available vertical space
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with Padding
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: screenWidth * 0.06,
+                    right: screenWidth * 0.06,
+                    top: screenHeight * 0.04, // Keep top padding
+                  ),
+                  child: Text(
                     'ตั้งค่า',
                     style: TextStyle(
                       fontFamily: 'NotoLoopedThaiUI',
@@ -311,85 +316,90 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: const Color(0xFF2E88F3),
                     ),
                   ),
-                  SizedBox(height: screenHeight * 0.04),
-                  Expanded(
-                    child: ListView(
-                      padding: EdgeInsets.zero,
-                      children: [
-                        _buildSettingsItem(
-                          icon: Icons.person_outline,
-                          title: 'ตั้งค่าโปรไฟล์',
-                          subtitle: 'แก้ไขข้อมูลส่วนตัวของคุณ',
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const ProfileSettingsScreen(),
-                              ),
-                            );
-                          },
-                          screenWidth: screenWidth,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildSettingsItem(
-                          icon: Icons.description_outlined,
-                          title: 'ข้อกำหนดการใช้งาน',
-                          subtitle: 'อ่านข้อกำหนดและเงื่อนไข',
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const TermsScreen(),
-                              ),
-                            );
-                          },
-                          screenWidth: screenWidth,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildSettingsItem(
-                          icon: Icons.help_outline,
-                          title: 'ช่วยเหลือ',
-                          subtitle: 'คำถามที่พบบ่อยและการสนับสนุน',
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const HelpScreen(),
-                              ),
-                            );
-                          },
-                          screenWidth: screenWidth,
-                        ),
-                        SizedBox(height: screenHeight * 0.05),
-                        _buildSettingsItem(
-                          icon: Icons.logout,
-                          title: 'ออกจากระบบ',
-                          subtitle: 'ออกจากบัญชีผู้ใช้ปัจจุบัน',
-                          onTap: _showLogoutDialog,
-                          screenWidth: screenWidth,
-                          isDestructive: true,
-                        ),
-                        const SizedBox(
-                          height: 16,
-                        ), // Space between logout and delete
-                        // --- NEW: Delete Account Item ---
-                        _buildSettingsItem(
-                          icon: Icons.delete_forever_outlined,
-                          title: 'ลบบัญชี',
-                          subtitle: 'ลบบัญชีและข้อมูลทั้งหมดของคุณอย่างถาวร',
-                          onTap:
-                              _showDeleteAccountDialog, // Call the new dialog
-                          screenWidth: screenWidth,
-                          isDestructive: true, // Use red color scheme
-                        ),
-                        // --- END NEW ---
-                      ],
+                ),
+                SizedBox(height: screenHeight * 0.04),
+
+                // Expanded ListView fills remaining space
+                Expanded(
+                  child: ListView(
+                    // Add horizontal padding here
+                    padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth * 0.06,
                     ),
+                    children: [
+                      _buildSettingsItem(
+                        icon: Icons.person_outline,
+                        title: 'ตั้งค่าโปรไฟล์',
+                        subtitle: 'แก้ไขข้อมูลส่วนตัวของคุณ',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const ProfileSettingsScreen(),
+                            ),
+                          );
+                        },
+                        screenWidth: screenWidth,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildSettingsItem(
+                        icon: Icons.description_outlined,
+                        title: 'ข้อกำหนดการใช้งาน',
+                        subtitle: 'อ่านข้อกำหนดและเงื่อนไข',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const TermsScreen(),
+                            ),
+                          );
+                        },
+                        screenWidth: screenWidth,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildSettingsItem(
+                        icon: Icons.help_outline,
+                        title: 'ช่วยเหลือ',
+                        subtitle: 'คำถามที่พบบ่อยและการสนับสนุน',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const HelpScreen(),
+                            ),
+                          );
+                        },
+                        screenWidth: screenWidth,
+                      ),
+                      SizedBox(height: screenHeight * 0.05),
+                      _buildSettingsItem(
+                        icon: Icons.logout,
+                        title: 'ออกจากระบบ',
+                        subtitle: 'ออกจากบัญชีผู้ใช้ปัจจุบัน',
+                        onTap: _showLogoutDialog,
+                        screenWidth: screenWidth,
+                        isDestructive: true,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildSettingsItem(
+                        icon: Icons.delete_forever_outlined,
+                        title: 'ลบบัญชี',
+                        subtitle: 'ลบบัญชีและข้อมูลทั้งหมดของคุณอย่างถาวร',
+                        onTap: _showDeleteAccountDialog,
+                        screenWidth: screenWidth,
+                        isDestructive: true,
+                      ),
+                      const SizedBox(
+                        height: 20,
+                      ), // Add some padding at the bottom of the list
+                    ],
                   ),
-                ],
-              ),
+                ),
+                // --- NO bottom padding needed here ---
+              ],
             ),
+            // --- END RESTRUCTURE ---
           ],
         ),
       ),

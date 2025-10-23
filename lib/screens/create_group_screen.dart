@@ -25,10 +25,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   // --- NEW FUNCTION to generate a 6-digit code ---
   String _generateInviteCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    // Use uppercase, lowercase, and numbers
+    const chars =
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final rnd = Random();
-    return String.fromCharCodes(Iterable.generate(
-        6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))));
+    // Use 8 characters for much higher security
+    return String.fromCharCodes(
+      Iterable.generate(8, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))),
+    );
   }
   // --- END NEW FUNCTION ---
 
@@ -60,7 +64,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
       // 2. Add this new group's ID to the user's 'joinedGroups' list
       await db.collection('users').doc(user.uid).update({
-        'joinedGroups': FieldValue.arrayUnion([newGroupRef.id])
+        'joinedGroups': FieldValue.arrayUnion([newGroupRef.id]),
       });
 
       if (mounted) {
@@ -220,6 +224,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                       isEnabled: _isFormValid,
                       onPressed: _saveGroup,
                     ),
+
+                  SizedBox(height: screenHeight * 0.37),
                 ],
               ),
             ),

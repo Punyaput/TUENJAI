@@ -526,7 +526,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Common Fields
+          // Common Fields: Title, Description
           _buildTextField(
             label: 'ชื่อ *',
             controller: _titleController,
@@ -542,89 +542,106 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             maxLines: 3,
           ),
           const SizedBox(height: 20),
-          // Type-Specific Fields
-          if (_selectedType == TaskType.appointment)
-            Row(
+
+          // --- Type-Specific Fields ---
+          if (_selectedType == TaskType.appointment) ...[
+            // --- USE WRAP FOR DATE/TIME PICKERS ---
+            Wrap(
+              spacing: 16.0, // Horizontal space between items
+              runSpacing: 16.0, // Vertical space if items wrap
               children: [
-                Expanded(
+                // Date Picker (Constrained width)
+                SizedBox(
+                  // Calculate approximate width for two items with spacing
+                  // Container padding (24*2=48), Wrap spacing (16)
+                  width:
+                      (screenWidth * 0.8 - 48 - 16) /
+                      2, // Adjust if padding/margins change
                   child: _buildDateTimePicker(
                     label: 'วันที่',
                     text: _selectedDate == null
                         ? 'เลือกวันที่'
-                        : DateFormat('dd/MM/yyyy').format(_selectedDate!),
+                        // Use consistent format
+                        : DateFormat('dd/MM/yyyy', 'th').format(_selectedDate!),
                     onTap: _pickDate,
                     screenWidth: screenWidth,
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
+                // Time Picker (Constrained width)
+                SizedBox(
+                  width:
+                      (screenWidth * 0.8 - 48 - 16) /
+                      2, // Adjust if padding/margins change
                   child: _buildDateTimePicker(
                     label: 'เวลา',
                     text: _selectedTime == null
                         ? 'เลือกเวลา'
-                        : _selectedTime!.format(context),
+                        : _selectedTime!.format(
+                            context,
+                          ), // Use context for locale format
                     onTap: _pickTime,
                     screenWidth: screenWidth,
                   ),
                 ),
               ],
-            )
-          else if (_selectedType == TaskType.countdown)
+            ),
+            // --- END WRAP ---
+          ] else if (_selectedType == TaskType.countdown) ...[
+            // Countdown only needs Date
             _buildDateTimePicker(
               label: 'วันที่เป้าหมาย',
               text: _selectedDate == null
                   ? 'เลือกวันที่'
-                  : DateFormat('dd/MM/yyyy').format(_selectedDate!),
+                  // Use consistent format
+                  : DateFormat('dd/MM/yyyy', 'th').format(_selectedDate!),
               onTap: _pickDate,
               screenWidth: screenWidth,
-            )
-          else if (_selectedType == TaskType.habit)
-            Column(
-              // Use Column for button + summary
-              children: [
-                Center(
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.edit_calendar),
-                    label: const Text(
-                      'แก้ไขตารางเวลาประจำสัปดาห์',
-                      style: TextStyle(fontFamily: 'NotoLoopedThaiUI'),
-                    ),
-                    onPressed: _editSchedule,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
-                    ),
+            ),
+          ] else if (_selectedType == TaskType.habit) ...[
+            // Habit has the Edit Schedule Button
+            Center(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.edit_calendar),
+                label: const Text(
+                  'แก้ไขตารางเวลาประจำสัปดาห์',
+                  style: TextStyle(fontFamily: 'NotoLoopedThaiUI'),
+                ),
+                onPressed: _editSchedule,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
                   ),
                 ),
-                // Show summary
-                if (_habitSchedule.isNotEmpty &&
-                    _habitSchedule.values.any((list) => list.isNotEmpty)) ...[
-                  const SizedBox(height: 10),
-                  Center(
-                    child: Text(
-                      'กำหนดเวลาแล้ว ${_habitSchedule.values.fold(0, (prev, list) => prev + list.length)} รายการ',
-                      style: TextStyle(
-                        fontFamily: 'NotoLoopedThaiUI',
-                        color: Colors.green[700],
-                      ),
-                    ),
-                  ),
-                ] else if (_habitSchedule.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  const Center(
-                    child: Text(
-                      'ยังไม่ได้กำหนดตารางเวลา',
-                      style: TextStyle(
-                        fontFamily: 'NotoLoopedThaiUI',
-                        color: Colors.orange,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+              ),
             ),
+            // Show summary of how many items are scheduled
+            if (_habitSchedule.isNotEmpty &&
+                _habitSchedule.values.any((list) => list.isNotEmpty)) ...[
+              const SizedBox(height: 10),
+              Center(
+                child: Text(
+                  'กำหนดเวลาแล้ว ${_habitSchedule.values.fold(0, (prev, list) => prev + list.length)} รายการ',
+                  style: TextStyle(
+                    fontFamily: 'NotoLoopedThaiUI',
+                    color: Colors.green[700],
+                  ),
+                ),
+              ),
+            ] else if (_habitSchedule.isNotEmpty) ...[
+              // Show if schedule exists but is empty
+              const SizedBox(height: 10),
+              const Center(
+                child: Text(
+                  'ยังไม่ได้กำหนดตารางเวลา',
+                  style: TextStyle(
+                    fontFamily: 'NotoLoopedThaiUI',
+                    color: Colors.orange,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -727,13 +744,21 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  text,
-                  style: const TextStyle(
-                    fontFamily: 'NotoLoopedThaiUI',
-                    fontSize: 16,
+                // --- Wrap the Text with Expanded ---
+                Expanded(
+                  child: Text(
+                    text,
+                    style: const TextStyle(
+                      fontFamily: 'NotoLoopedThaiUI',
+                      fontSize: 16,
+                    ),
+                    overflow: TextOverflow
+                        .ellipsis, // Prevent overflow if text is extremely long
+                    maxLines: 1,
                   ),
                 ),
+                // --- END WRAP ---
+                const SizedBox(width: 8), // Add a little space before the icon
                 const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
               ],
             ),

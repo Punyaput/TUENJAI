@@ -1,18 +1,17 @@
 // lib/screens/group_settings_screen.dart
 
-import 'dart:io'; // For File
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart'; // For image upload
-import 'package:image_picker/image_picker.dart'; // For image picking
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../widgets/background_circles.dart';
-import '../widgets/custom_button.dart'; // For potential future use, e.g., leave group
+// import '../widgets/custom_button.dart';
 
 class GroupSettingsScreen extends StatefulWidget {
   final String groupId;
-  // Pass group name for initial display while loading
   final String initialGroupName;
 
   const GroupSettingsScreen({
@@ -31,14 +30,14 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   String? _groupDescription;
   String? _groupImageUrl;
   String? _inviteCode;
-  List<Map<String, dynamic>> _membersData =
-      []; // Store member details (name, role)
+  List<Map<String, dynamic>> _membersData = [];
+  // --- NEW: State for pending requests ---
+  List<Map<String, dynamic>> _pendingMembersData = [];
+  // --- END NEW ---
 
   // Current User State
-  String?
-  _currentUserRole; // User's overall role ('caretaker' or 'carereceiver')
-  bool _isCurrentUserGroupCaretaker =
-      false; // Is the current user a caretaker IN THIS GROUP?
+  String _currentUserId = '';
+  bool _isCurrentUserGroupCaretaker = false;
 
   // Image Picking State
   XFile? _imageFile;
@@ -49,90 +48,96 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   bool _isUploadingImage = false;
   bool _isDeletingGroup = false;
 
+  // --- NEW: Cache usernames to avoid re-fetching ---
+  final Map<String, Map<String, dynamic>> _userCache = {};
+  // --- END NEW ---
+
   @override
   void initState() {
     super.initState();
-    _groupName = widget.initialGroupName; // Show initial name immediately
+    _groupName = widget.initialGroupName;
     _fetchGroupAndUserData();
   }
 
-  // Fetch group details and current user's role/status within the group
+  // --- UPDATED: Fetches pending requests as well ---
   Future<void> _fetchGroupAndUserData() async {
     setState(() {
       _isLoadingGroupData = true;
     });
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
-      // Handle not logged in
-      if (mounted) Navigator.pop(context); // Go back if no user
+      if (mounted) Navigator.pop(context);
       return;
     }
+    _currentUserId = currentUser.uid;
 
     try {
-      // Fetch current user's general role
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
-          .doc(currentUser.uid)
+          .doc(_currentUserId)
           .get();
       if (userDoc.exists && mounted) {
-        _currentUserRole = userDoc.data()?['role'];
+        // Cache current user
+        _userCache[_currentUserId] = userDoc.data()!;
       }
 
-      // Fetch group document
       final groupDoc = await FirebaseFirestore.instance
           .collection('groups')
           .doc(widget.groupId)
           .get();
-
-      if (!groupDoc.exists) {
-        throw Exception("Group not found");
-      }
+      if (!groupDoc.exists) throw Exception("Group not found");
 
       final data = groupDoc.data()!;
       _inviteCode = data['inviteCode'];
-      _groupName =
-          data['groupName'] ??
-          widget.initialGroupName; // Update with fetched name
+      _groupName = data['groupName'] ?? widget.initialGroupName;
       _groupDescription = data['description'] ?? '';
-      _groupImageUrl = data['groupImageUrl']; // Get image URL
+      _groupImageUrl = data['groupImageUrl'];
 
-      // Fetch member details and determine current user's role *within the group*
-      final List<dynamic> memberIds = data['members'] ?? [];
+      final List<String> memberIds =
+          (data['members'] as List?)?.cast<String>() ?? [];
+      final List<String> pendingIds =
+          (data['pendingRequests'] as List?)?.cast<String>() ?? [];
+      _isCurrentUserGroupCaretaker = false; // Reset
+
+      // Find all unique IDs we need to fetch
+      final allIdsToFetch = {...memberIds, ...pendingIds}.toList();
+      await _fetchUsernames(allIdsToFetch); // Fetch and cache all users
+
       final List<Map<String, dynamic>> fetchedMembersData = [];
-      _isCurrentUserGroupCaretaker = false; // Reset before check
+      final List<Map<String, dynamic>> fetchedPendingData = [];
 
-      if (memberIds.isNotEmpty) {
-        // Fetch user documents for member IDs
-        // You might already have a function for this, adapt if necessary
-        final usersQuery = await FirebaseFirestore.instance
-            .collection('users')
-            .where(FieldPath.documentId, whereIn: memberIds)
-            .get();
-        Map<String, Map<String, dynamic>> userDataMap = {
-          for (var doc in usersQuery.docs) doc.id: doc.data(),
-        };
-
-        for (String memberId in memberIds.cast<String>()) {
-          final memberData = userDataMap[memberId];
-          final memberRole = memberData?['role'] ?? 'unknown';
-          fetchedMembersData.add({
-            'uid': memberId,
-            'username': memberData?['username'] ?? 'Unknown Member',
-            'role': memberRole,
-            'profilePicUrl': memberData?['profilePicUrl'], // Get profile pic
-          });
-          // Check if the currently logged-in user is a caretaker in this group
-          if (memberId == currentUser.uid && memberRole == 'caretaker') {
-            _isCurrentUserGroupCaretaker = true;
-          }
+      // Process members
+      for (String memberId in memberIds) {
+        final memberData = _userCache[memberId];
+        final memberRole = memberData?['role'] ?? 'unknown';
+        fetchedMembersData.add({
+          'uid': memberId,
+          'username': memberData?['username'] ?? 'กำลังโหลด...',
+          'role': memberRole,
+          'profilePicUrl': memberData?['profilePicUrl'],
+        });
+        if (memberId == _currentUserId && memberRole == 'caretaker') {
+          _isCurrentUserGroupCaretaker = true;
         }
-        // Sort members? Maybe put caretakers first? (Optional)
-        fetchedMembersData.sort((a, b) => a['role'] == 'caretaker' ? -1 : 1);
       }
+
+      // Process pending requests
+      for (String memberId in pendingIds) {
+        final memberData = _userCache[memberId];
+        fetchedPendingData.add({
+          'uid': memberId,
+          'username': memberData?['username'] ?? 'กำลังโหลด...',
+          'role': memberData?['role'] ?? 'unknown',
+          'profilePicUrl': memberData?['profilePicUrl'],
+        });
+      }
+
+      fetchedMembersData.sort((a, b) => a['role'] == 'caretaker' ? -1 : 1);
 
       if (mounted) {
         setState(() {
           _membersData = fetchedMembersData;
+          _pendingMembersData = fetchedPendingData;
           _isLoadingGroupData = false;
         });
       }
@@ -142,21 +147,48 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         setState(() {
           _isLoadingGroupData = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('เกิดข้อผิดพลาด: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        // Optionally pop if group fetch failed critically
+        _handleError("Error fetching group data", e);
         if (e.toString().contains("Group not found") && mounted)
           Navigator.pop(context);
       }
     }
   }
 
+  // --- NEW: Helper to fetch and cache user data ---
+  Future<void> _fetchUsernames(List<String> userIds) async {
+    List<String> idsToFetch = [];
+    for (String id in userIds.toSet()) {
+      if (!_userCache.containsKey(id) && id.isNotEmpty) {
+        idsToFetch.add(id);
+      }
+    }
+    if (idsToFetch.isEmpty) return;
+
+    try {
+      // Fetch in batches of 10
+      for (var i = 0; i < idsToFetch.length; i += 10) {
+        var batchIds = idsToFetch.sublist(
+          i,
+          i + 10 > idsToFetch.length ? idsToFetch.length : i + 10,
+        );
+        if (batchIds.isEmpty) continue;
+        final querySnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: batchIds)
+            .get();
+        for (var doc in querySnapshot.docs) {
+          _userCache[doc.id] = doc.data(); // Cache the full data map
+        }
+      }
+    } catch (e) {
+      print("Error batch fetching usernames: $e");
+    }
+  }
+  // --- END NEW HELPER ---
+
   // --- Image Handling ---
   Future<void> _pickGroupImage(ImageSource source) async {
+    /* ... (unchanged) ... */
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
@@ -167,7 +199,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         setState(() {
           _imageFile = pickedFile;
         });
-        _uploadGroupImage(); // Immediately start upload after picking
+        _uploadGroupImage();
       }
     } catch (e) {
       _handleError("Error picking image", e);
@@ -175,7 +207,8 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   }
 
   void _showImagePickerOptions() {
-    if (!_isCurrentUserGroupCaretaker) return; // Permission check
+    /* ... (unchanged) ... */
+    if (!_isCurrentUserGroupCaretaker) return;
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -239,6 +272,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     required String label,
     required VoidCallback onTap,
   }) {
+    /* ... (unchanged) ... */
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -267,11 +301,11 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   }
 
   Future<void> _uploadGroupImage() async {
+    /* ... (unchanged) ... */
     if (_imageFile == null) return;
     setState(() {
       _isUploadingImage = true;
     });
-
     try {
       final String fileName =
           'group_pics/${widget.groupId}/image_${DateTime.now().millisecondsSinceEpoch}.jpg';
@@ -281,20 +315,17 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       final UploadTask uploadTask = storageRef.putFile(File(_imageFile!.path));
       final TaskSnapshot snapshot = await uploadTask;
       final String downloadUrl = await snapshot.ref.getDownloadURL();
-
-      // Update Firestore with the new URL
       await FirebaseFirestore.instance
           .collection('groups')
           .doc(widget.groupId)
           .update({
             'groupImageUrl': downloadUrl,
-            'lastUpdatedAt': FieldValue.serverTimestamp(), // Track updates
+            'lastUpdatedAt': FieldValue.serverTimestamp(),
           });
-
       if (mounted) {
         setState(() {
-          _groupImageUrl = downloadUrl; // Update local state to show new image
-          _imageFile = null; // Clear picked file
+          _groupImageUrl = downloadUrl;
+          _imageFile = null;
           _isUploadingImage = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
@@ -304,7 +335,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           ),
         );
       }
-      // TODO: Delete old image from storage if one existed
     } catch (e) {
       _handleError("Error uploading group image", e);
       if (mounted)
@@ -313,18 +343,16 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         });
     }
   }
-  // --- End Image Handling ---
 
   // --- Edit Name/Description ---
   void _showEditDialog(String field, String initialValue) {
-    if (!_isCurrentUserGroupCaretaker) return; // Permission check
-
+    /* ... (unchanged) ... */
+    if (!_isCurrentUserGroupCaretaker) return;
     final TextEditingController controller = TextEditingController(
       text: initialValue,
     );
     String title = field == 'groupName' ? 'แก้ไขชื่อกลุ่ม' : 'แก้ไขคำอธิบาย';
     String label = field == 'groupName' ? 'ชื่อกลุ่ม *' : 'คำอธิบาย';
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -353,10 +381,8 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           TextButton(
             onPressed: () async {
               final newValue = controller.text.trim();
-              // Basic validation for name
               if (field == 'groupName' && newValue.isEmpty) return;
-
-              Navigator.pop(context); // Close dialog
+              Navigator.pop(context);
               await _updateGroupField(field, newValue);
             },
             child: const Text(
@@ -370,6 +396,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   }
 
   Future<void> _updateGroupField(String field, String value) async {
+    /* ... (unchanged) ... */
     try {
       await FirebaseFirestore.instance
           .collection('groups')
@@ -380,7 +407,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           });
       if (mounted) {
         setState(() {
-          // Update local state immediately
           if (field == 'groupName') _groupName = value;
           if (field == 'description') _groupDescription = value;
         });
@@ -389,26 +415,21 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       _handleError("Error updating $field", e);
     }
   }
-  // --- End Edit Name/Description ---
 
   // --- Delete Group ---
   Future<void> _deleteGroup() async {
+    /* ... (unchanged) ... */
     setState(() {
       _isDeletingGroup = true;
     });
     try {
-      // Basic delete - does not delete subcollections (tasks)
       await FirebaseFirestore.instance
           .collection('groups')
           .doc(widget.groupId)
           .delete();
-      // TODO (Advanced): Could trigger a Cloud Function to delete tasks and update user joinedGroups.
-
       if (mounted) {
         int count = 0;
-        Navigator.of(
-          context,
-        ).popUntil((_) => count++ >= 2); // Go back 2 screens
+        Navigator.of(context).popUntil((_) => count++ >= 2);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('ลบกลุ่มเรียบร้อยแล้ว'),
@@ -426,7 +447,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   }
 
   void _showDeleteGroupDialog() {
-    // Permission check already done by button visibility
+    /* ... (unchanged) ... */
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -478,10 +499,134 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       },
     );
   }
-  // --- End Delete Group ---
 
-  // --- Generic Error Handler ---
+  // --- NEW: Remove Member Logic ---
+  void _showRemoveMemberDialog(String memberId, String username) {
+    /* ... (unchanged) ... */
+    if (!_isCurrentUserGroupCaretaker || memberId == _currentUserId) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'นำสมาชิกออก',
+          style: TextStyle(fontFamily: 'NotoLoopedThaiUI'),
+        ),
+        content: Text(
+          'คุณแน่ใจหรือไม่ว่าต้องการนำ "$username" ออกจากกลุ่มนี้?',
+          style: const TextStyle(fontFamily: 'NotoLoopedThaiUI'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'ยกเลิก',
+              style: TextStyle(fontFamily: 'NotoLoopedThaiUI'),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _removeMember(memberId);
+            },
+            child: const Text(
+              'นำออก',
+              style: TextStyle(
+                fontFamily: 'NotoLoopedThaiUI',
+                color: Colors.red,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _removeMember(String memberId) async {
+    /* ... (unchanged) ... */
+    if (!_isCurrentUserGroupCaretaker) return;
+    setState(() {
+      _isLoadingGroupData = true;
+    });
+    try {
+      final db = FirebaseFirestore.instance;
+      final batch = db.batch();
+      final groupRef = db.collection('groups').doc(widget.groupId);
+      batch.update(groupRef, {
+        'members': FieldValue.arrayRemove([memberId]),
+      });
+      final userRef = db.collection('users').doc(memberId);
+      batch.update(userRef, {
+        'joinedGroups': FieldValue.arrayRemove([widget.groupId]),
+      });
+      await batch.commit();
+      _fetchGroupAndUserData();
+    } catch (e) {
+      _handleError("Error removing member", e);
+      if (mounted)
+        setState(() {
+          _isLoadingGroupData = false;
+        });
+    }
+  }
+
+  // --- NEW: Accept/Deny Logic ---
+  Future<void> _acceptMember(String memberId) async {
+    if (!_isCurrentUserGroupCaretaker) return;
+    setState(() {
+      _isLoadingGroupData = true;
+    }); // Re-use loading state
+    try {
+      final db = FirebaseFirestore.instance;
+      final batch = db.batch();
+      final groupRef = db.collection('groups').doc(widget.groupId);
+      final userRef = db.collection('users').doc(memberId);
+
+      // 1. Add to 'members', remove from 'pendingRequests'
+      batch.update(groupRef, {
+        'members': FieldValue.arrayUnion([memberId]),
+        'pendingRequests': FieldValue.arrayRemove([memberId]),
+      });
+      // 2. Add group to user's 'joinedGroups'
+      batch.update(userRef, {
+        'joinedGroups': FieldValue.arrayUnion([widget.groupId]),
+      });
+      await batch.commit();
+      _fetchGroupAndUserData(); // Refresh list
+    } catch (e) {
+      _handleError("Error accepting member", e);
+      if (mounted)
+        setState(() {
+          _isLoadingGroupData = false;
+        });
+    }
+  }
+
+  Future<void> _denyMember(String memberId) async {
+    if (!_isCurrentUserGroupCaretaker) return;
+    setState(() {
+      _isLoadingGroupData = true;
+    });
+    try {
+      // Just remove them from the pending list
+      await FirebaseFirestore.instance
+          .collection('groups')
+          .doc(widget.groupId)
+          .update({
+            'pendingRequests': FieldValue.arrayRemove([memberId]),
+          });
+      _fetchGroupAndUserData(); // Refresh list
+    } catch (e) {
+      _handleError("Error denying member", e);
+      if (mounted)
+        setState(() {
+          _isLoadingGroupData = false;
+        });
+    }
+  }
+  // --- END NEW Accept/Deny Logic ---
+
   void _handleError(String contextMessage, dynamic error) {
+    /* ... (unchanged) ... */
     print("$contextMessage: $error");
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -502,11 +647,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      appBar: AppBar(
-        title: Text(
-          _groupName ?? 'ตั้งค่ากลุ่ม',
-        ), // Show fetched name or initial
-      ),
+      appBar: AppBar(title: Text(_groupName ?? 'ตั้งค่ากลุ่ม')),
       body: SafeArea(
         child: Stack(
           children: [
@@ -515,179 +656,197 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
               left: -screenWidth * 0.25,
               child: const BottomBackgroundCircles(),
             ),
-            _isLoadingGroupData
-                ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
-                    // Add pull-to-refresh
-                    onRefresh: _fetchGroupAndUserData,
-                    child: SingleChildScrollView(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: screenWidth * 0.06,
-                        vertical: 20,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Group Image Section
-                          Center(
-                            child: Stack(
-                              alignment: Alignment.bottomRight,
-                              children: [
-                                CircleAvatar(
-                                  radius: screenWidth * 0.2,
-                                  backgroundColor: Colors.grey.shade300,
-                                  backgroundImage: _imageFile != null
-                                      ? FileImage(File(_imageFile!.path))
-                                            as ImageProvider
-                                      : (_groupImageUrl != null &&
-                                                _groupImageUrl!.isNotEmpty
-                                            ? NetworkImage(_groupImageUrl!)
-                                            : null),
-                                  child:
-                                      (_imageFile == null &&
-                                          (_groupImageUrl == null ||
-                                              _groupImageUrl!.isEmpty))
-                                      ? Icon(
-                                          Icons.group,
-                                          size: screenWidth * 0.15,
-                                          color: Colors.grey.shade500,
-                                        )
-                                      : null,
-                                ),
-                                if (_isCurrentUserGroupCaretaker) // Only show edit icon if caretaker
-                                  Positioned(
-                                    bottom: 0,
-                                    right: 0,
-                                    child: Material(
-                                      // Wrap IconButton in Material for splash
-                                      color: Theme.of(context).primaryColor,
-                                      shape: const CircleBorder(),
-                                      elevation: 2.0,
-                                      child: InkWell(
-                                        customBorder: const CircleBorder(),
-                                        onTap: _showImagePickerOptions,
-                                        child: Container(
-                                          // Container ensures padding and border visibility
-                                          padding: const EdgeInsets.all(6),
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: Colors.white,
-                                              width: 2,
-                                            ),
-                                          ),
-                                          child: _isUploadingImage
-                                              ? const SizedBox(
-                                                  width: 18,
-                                                  height: 18,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        color: Colors.white,
-                                                        strokeWidth: 2,
-                                                      ),
-                                                )
-                                              : Icon(
-                                                  Icons.edit,
-                                                  color: Colors.white,
-                                                  size: screenWidth * 0.04,
-                                                ),
+            // Show main loading indicator
+            if (_isLoadingGroupData &&
+                _pendingMembersData.isEmpty &&
+                _membersData.isEmpty) // Only show full-screen load on initial
+              const Center(child: CircularProgressIndicator())
+            else
+              RefreshIndicator(
+                onRefresh: _fetchGroupAndUserData,
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: screenWidth * 0.06,
+                    vertical: 20,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Group Image Section
+                      Center(
+                        child: Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            CircleAvatar(
+                              radius: screenWidth * 0.2,
+                              backgroundColor: Colors.grey.shade300,
+                              backgroundImage: _imageFile != null
+                                  ? FileImage(File(_imageFile!.path))
+                                        as ImageProvider
+                                  : (_groupImageUrl != null &&
+                                            _groupImageUrl!.isNotEmpty
+                                        ? NetworkImage(_groupImageUrl!)
+                                        : null),
+                              child:
+                                  (_imageFile == null &&
+                                      (_groupImageUrl == null ||
+                                          _groupImageUrl!.isEmpty))
+                                  ? Icon(
+                                      Icons.group,
+                                      size: screenWidth * 0.15,
+                                      color: Colors.grey.shade500,
+                                    )
+                                  : null,
+                            ),
+                            if (_isCurrentUserGroupCaretaker)
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Material(
+                                  color: Theme.of(context).primaryColor,
+                                  shape: const CircleBorder(),
+                                  elevation: 2.0,
+                                  child: InkWell(
+                                    customBorder: const CircleBorder(),
+                                    onTap: _showImagePickerOptions,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2,
                                         ),
                                       ),
+                                      child: _isUploadingImage
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                color: Colors.white,
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : Icon(
+                                              Icons.edit,
+                                              color: Colors.white,
+                                              size: screenWidth * 0.04,
+                                            ),
                                     ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-
-                          // Group Name and Description Section
-                          _buildInfoSection(
-                            label: 'ชื่อกลุ่ม',
-                            value: _groupName ?? '...',
-                            onEdit: _isCurrentUserGroupCaretaker
-                                ? () => _showEditDialog(
-                                    'groupName',
-                                    _groupName ?? '',
-                                  )
-                                : null,
-                            screenWidth: screenWidth,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildInfoSection(
-                            label: 'คำอธิบาย',
-                            value:
-                                _groupDescription != null &&
-                                    _groupDescription!.isNotEmpty
-                                ? _groupDescription!
-                                : 'ไม่มีคำอธิบาย',
-                            valueColor:
-                                _groupDescription != null &&
-                                    _groupDescription!.isNotEmpty
-                                ? null
-                                : Colors.grey,
-                            onEdit: _isCurrentUserGroupCaretaker
-                                ? () => _showEditDialog(
-                                    'description',
-                                    _groupDescription ?? '',
-                                  )
-                                : null,
-                            screenWidth: screenWidth,
-                          ),
-                          const SizedBox(height: 24),
-
-                          // Invite Code Section (visible to caretakers)
-                          if (_isCurrentUserGroupCaretaker) ...[
-                            _buildInviteCodeSection(screenWidth),
-                            const SizedBox(height: 24),
-                          ],
-
-                          // Members List Section
-                          _buildMembersList(screenWidth),
-                          const SizedBox(height: 24),
-
-                          // Delete Button (visible to caretakers)
-                          if (_isCurrentUserGroupCaretaker)
-                            Center(
-                              child: TextButton.icon(
-                                icon: const Icon(
-                                  Icons.delete_forever,
-                                  color: Colors.red,
-                                ),
-                                label: const Text(
-                                  'ลบกลุ่มนี้',
-                                  style: TextStyle(
-                                    fontFamily: 'NotoLoopedThaiUI',
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                onPressed: _isDeletingGroup
-                                    ? null
-                                    : _showDeleteGroupDialog,
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 10,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: const BorderSide(color: Colors.red),
                                   ),
                                 ),
                               ),
-                            ),
-                          const SizedBox(height: 20), // Bottom padding
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 24),
+
+                      // Group Name/Description Section
+                      _buildInfoSection(
+                        label: 'ชื่อกลุ่ม',
+                        value: _groupName ?? '...',
+                        onEdit: _isCurrentUserGroupCaretaker
+                            ? () =>
+                                  _showEditDialog('groupName', _groupName ?? '')
+                            : null,
+                        screenWidth: screenWidth,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildInfoSection(
+                        label: 'คำอธิบาย',
+                        value:
+                            _groupDescription != null &&
+                                _groupDescription!.isNotEmpty
+                            ? _groupDescription!
+                            : 'ไม่มีคำอธิบาย',
+                        valueColor:
+                            _groupDescription != null &&
+                                _groupDescription!.isNotEmpty
+                            ? null
+                            : Colors.grey,
+                        onEdit: _isCurrentUserGroupCaretaker
+                            ? () => _showEditDialog(
+                                'description',
+                                _groupDescription ?? '',
+                              )
+                            : null,
+                        screenWidth: screenWidth,
+                      ),
+                      const SizedBox(height: 24),
+
+                      // --- NEW: Pending Requests Section ---
+                      if (_isCurrentUserGroupCaretaker &&
+                          _pendingMembersData.isNotEmpty) ...[
+                        _buildPendingRequestsList(screenWidth),
+                        const SizedBox(height: 24),
+                      ],
+                      // --- END NEW ---
+
+                      // Invite Code Section
+                      if (_isCurrentUserGroupCaretaker) ...[
+                        Center(child: _buildInviteCodeSection(screenWidth)),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // Members List Section
+                      _buildMembersList(screenWidth),
+                      const SizedBox(height: 24),
+
+                      // Delete Button
+                      if (_isCurrentUserGroupCaretaker)
+                        Center(
+                          child: TextButton.icon(
+                            icon: const Icon(
+                              Icons.delete_forever,
+                              color: Colors.red,
+                            ),
+                            label: const Text(
+                              'ลบกลุ่มนี้',
+                              style: TextStyle(
+                                fontFamily: 'NotoLoopedThaiUI',
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            onPressed: _isDeletingGroup
+                                ? null
+                                : _showDeleteGroupDialog,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: const BorderSide(color: Colors.red),
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 20),
+                    ],
                   ),
+                ),
+              ),
+            // Show a small loading indicator at top if refreshing/acting
+            if (_isLoadingGroupData &&
+                (_pendingMembersData.isNotEmpty || _membersData.isNotEmpty))
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  backgroundColor: Colors.transparent,
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  // Helper widget for displaying Name/Description with an optional Edit button
+  // Helper for Name/Description
   Widget _buildInfoSection({
     required String label,
     required String value,
@@ -695,6 +854,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     Color? valueColor,
     VoidCallback? onEdit,
   }) {
+    /* ... (unchanged) ... */
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       decoration: BoxDecoration(
@@ -735,8 +895,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
               ],
             ),
           ),
-          if (onEdit !=
-              null) // Show edit button only if callback is provided (i.e., user has permission)
+          if (onEdit != null)
             IconButton(
               icon: Icon(Icons.edit_note, color: Colors.grey[500], size: 20),
               onPressed: onEdit,
@@ -747,10 +906,12 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     );
   }
 
+  // Centered Invite Code Section
   Widget _buildInviteCodeSection(double screenWidth) {
-    if (_inviteCode == null)
-      return const SizedBox.shrink(); // Don't show if no code
+    /* ... (unchanged) ... */
+    if (_inviteCode == null) return const SizedBox.shrink();
     return Container(
+      width: screenWidth * 0.8,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -778,15 +939,14 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
           QrImageView(
             data: _inviteCode!,
             version: QrVersions.auto,
-            size: screenWidth * 0.5,
+            size: screenWidth * 0.45,
           ),
           const SizedBox(height: 16),
           SelectableText(
-            // Make the code selectable
             _inviteCode!,
             style: TextStyle(
               fontFamily: 'monospace',
-              fontSize: screenWidth * 0.08,
+              fontSize: screenWidth * 0.07,
               fontWeight: FontWeight.bold,
               letterSpacing: 2,
               color: const Color(0xFF2E88F3),
@@ -807,55 +967,36 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     );
   }
 
-  Widget _buildMembersList(double screenWidth) {
+  // --- NEW: Pending Requests List ---
+  Widget _buildPendingRequestsList(double screenWidth) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        vertical: 16,
-        horizontal: 20,
-      ), // Consistent padding
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.yellow.shade50, // Highlight color
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 1),
-          ),
-        ],
+        border: Border.all(color: Colors.orange.shade200),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'สมาชิก (${_membersData.length})',
+            'คำขอเข้าร่วม (${_pendingMembersData.length})',
             style: TextStyle(
               fontFamily: 'NotoLoopedThaiUI',
               fontSize: screenWidth * 0.05,
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF374151),
+              color: Colors.orange.shade800,
             ),
           ),
-          const SizedBox(height: 16),
-          if (_membersData.isEmpty)
-            const Text(
-              'ยังไม่มีสมาชิกอื่น',
-              style: TextStyle(
-                fontFamily: 'NotoLoopedThaiUI',
-                color: Colors.grey,
-              ),
-            ),
+          const SizedBox(height: 8),
           ListView.separated(
-            // Use ListView.separated for dividers
-            shrinkWrap: true, // Important inside SingleChildScrollView
-            physics:
-                const NeverScrollableScrollPhysics(), // Disable ListView's own scrolling
-            itemCount: _membersData.length,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _pendingMembersData.length,
             separatorBuilder: (context, index) =>
-                Divider(height: 1, color: Colors.grey[200]),
+                Divider(height: 1, color: Colors.orange.shade100),
             itemBuilder: (context, index) {
-              final member = _membersData[index];
-              final isCaretaker = member['role'] == 'caretaker';
+              final member = _pendingMembersData[index];
               final profilePicUrl = member['profilePicUrl'] as String?;
 
               return ListTile(
@@ -883,18 +1024,26 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                trailing: Text(
-                  isCaretaker ? 'ผู้ดูแล' : 'ผู้รับการดูแล',
-                  style: TextStyle(
-                    fontFamily: 'NotoLoopedThaiUI',
-                    fontSize: 14,
-                    color: isCaretaker
-                        ? Theme.of(context).primaryColor
-                        : Colors.green[600],
-                    fontWeight: FontWeight.w500,
-                  ),
+                subtitle: _buildFancyRole(
+                  member['role'] == 'caretaker',
+                ), // Show their role
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Deny Button
+                    IconButton(
+                      icon: Icon(Icons.close, color: Colors.red.shade400),
+                      tooltip: 'ปฏิเสธ',
+                      onPressed: () => _denyMember(member['uid']),
+                    ),
+                    // Accept Button
+                    IconButton(
+                      icon: Icon(Icons.check, color: Colors.green.shade600),
+                      tooltip: 'อนุมัติ',
+                      onPressed: () => _acceptMember(member['uid']),
+                    ),
+                  ],
                 ),
-                // Optional: Add actions like "Remove member" for caretakers (more complex)
               );
             },
           ),
@@ -902,4 +1051,139 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       ),
     );
   }
+  // --- END NEW ---
+
+  // --- UPDATED: Member List with fancy roles and kick button ---
+  Widget _buildMembersList(double screenWidth) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'สมาชิก (${_membersData.length})',
+            style: TextStyle(
+              fontFamily: 'NotoLoopedThaiUI',
+              fontSize: screenWidth * 0.05,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF374151),
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (_membersData.isEmpty)
+            const Text(
+              'ยังไม่มีสมาชิกอื่น',
+              style: TextStyle(
+                fontFamily: 'NotoLoopedThaiUI',
+                color: Colors.grey,
+              ),
+            ),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _membersData.length,
+            separatorBuilder: (context, index) =>
+                Divider(height: 1, color: Colors.grey[200]),
+            itemBuilder: (context, index) {
+              final member = _membersData[index];
+              final isCaretaker = member['role'] == 'caretaker';
+              final profilePicUrl = member['profilePicUrl'] as String?;
+              final bool isSelf = member['uid'] == _currentUserId;
+
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(vertical: 4.0),
+                leading: CircleAvatar(
+                  radius: 22,
+                  backgroundColor: Colors.grey.shade200,
+                  backgroundImage:
+                      (profilePicUrl != null && profilePicUrl.isNotEmpty)
+                      ? NetworkImage(profilePicUrl)
+                      : null,
+                  child: (profilePicUrl == null || profilePicUrl.isEmpty)
+                      ? Icon(
+                          Icons.person,
+                          size: 22,
+                          color: Colors.grey.shade400,
+                        )
+                      : null,
+                ),
+                title: Text(
+                  member['username'],
+                  style: const TextStyle(
+                    fontFamily: 'NotoLoopedThaiUI',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: _buildFancyRole(isCaretaker), // Use fancy role
+                trailing:
+                    (_isCurrentUserGroupCaretaker &&
+                        !isSelf) // Show kick button if user is admin AND it's not themselves
+                    ? IconButton(
+                        icon: Icon(
+                          Icons.remove_circle_outline,
+                          color: Colors.red[300],
+                        ),
+                        tooltip: 'นำสมาชิกออก',
+                        onPressed: () => _showRemoveMemberDialog(
+                          member['uid'],
+                          member['username'],
+                        ),
+                      )
+                    : null, // No button for self or if not an admin
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- NEW: Fancy Role Widget ---
+  Widget _buildFancyRole(bool isCaretaker) {
+    final Color color = isCaretaker
+        ? const Color(0xFF2E88F3)
+        : const Color(0xFF7ED6A8); // Blue or Green
+    final IconData icon = isCaretaker
+        ? Icons.admin_panel_settings_outlined
+        : Icons.person_outline;
+    final String text = isCaretaker ? 'ผู้ดูแล' : 'ผู้รับการดูแล';
+
+    return Container(
+      margin: const EdgeInsets.only(top: 4), // Add margin on top
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min, // Don't take full width
+        children: [
+          Icon(icon, size: 14, color: color), // Darker icon
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'NotoLoopedThaiUI',
+              fontSize: 12,
+              color: color, // Darker text
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  // --- END NEW WIDGET ---
 } // End of _GroupSettingsScreenState

@@ -11,7 +11,7 @@ import '../widgets/custom_button.dart';
 import './groups_screen.dart';
 import './settings_screen.dart';
 import './login_screen.dart';
-import 'group_detail_screen.dart'; // Needed for navigation
+// Removed GroupDetailScreen import as it's not directly needed here
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,9 +24,10 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 1;
   String? _username;
   String? _userRole;
-  String? _profilePicUrl;
+  String? _profilePicUrl; // Added for profile picture
   bool _isLoading = true;
 
+  // Caches
   final Map<String, String> _userNameCache = {};
   final Map<String, String> _groupNameCache = {};
 
@@ -41,10 +42,11 @@ class _HomeScreenState extends State<HomeScreen> {
   };
   final List<String> _dayLabelsShort = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
 
-  final Color _appointmentColor = const Color(0xFF2E88F3);
-  final Color _countdownColor = const Color(0xFF7ED6A8);
-  final Color _habitColor = Colors.purple.shade300;
-  final Color _completedColor = Colors.green.shade600;
+  // Consistent Task Type Colors
+  final Color _appointmentColor = const Color(0xFF2E88F3); // Blue
+  final Color _countdownColor = const Color(0xFF7ED6A8); // Green
+  final Color _habitColor = Colors.purple.shade300; // Purple
+  final Color _completedColor = Colors.green.shade600; // Completed Green
 
   @override
   void initState() {
@@ -55,7 +57,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // --- Data Fetching and Helpers ---
   Future<void> _fetchUserData() async {
-    /* ... unchanged ... */
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       _logout();
@@ -85,38 +86,32 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<String> _getUsername(String userId) async {
-    /* ... unchanged ... */
-    if (_userNameCache.containsKey(userId)) {
-      return _userNameCache[userId]!;
-    }
+    if (_userNameCache.containsKey(userId)) return _userNameCache[userId]!;
     try {
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .get();
       if (userDoc.exists) {
-        final name = userDoc.data()?['username'] ?? 'Unknown User';
+        final name = userDoc.data()?['username'] ?? 'ไม่ทราบชื่อ';
         _userNameCache[userId] = name;
         return name;
       }
     } catch (e) {
       print("Error getting username for $userId: $e");
     }
-    return 'Unknown User';
+    return 'ไม่ทราบชื่อ';
   }
 
   Future<Map<String, String>> _getUsernames(List<String> userIds) async {
-    /* ... unchanged ... */
     Map<String, String> names = {};
     List<String> idsToFetch = [];
-    for (String id in userIds) {
-      if (_userNameCache.containsKey(id)) {
-        names[id] = _userNameCache[id]!;
-      } else if (id.isNotEmpty) {
+    for (String id in userIds.toSet()) {
+      if (!_userNameCache.containsKey(id) && id.isNotEmpty)
         idsToFetch.add(id);
-      }
+      else if (_userNameCache.containsKey(id))
+        names[id] = _userNameCache[id]!;
     }
-    idsToFetch = idsToFetch.toSet().toList();
     if (idsToFetch.isNotEmpty) {
       try {
         for (var i = 0; i < idsToFetch.length; i += 10) {
@@ -130,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
               .where(FieldPath.documentId, whereIn: batchIds)
               .get();
           for (var doc in querySnapshot.docs) {
-            final name = doc.data()['username'] ?? 'Unknown User';
+            final name = doc.data()['username'] ?? 'ไม่ทราบชื่อ';
             _userNameCache[doc.id] = name;
             names[doc.id] = name;
           }
@@ -140,35 +135,31 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
     for (String id in userIds) {
-      names.putIfAbsent(id, () => _userNameCache[id] ?? 'Unknown User');
+      names.putIfAbsent(id, () => _userNameCache[id] ?? 'ไม่ทราบชื่อ');
     }
     return names;
   }
 
   Future<String> _getGroupName(String groupId) async {
-    /* ... unchanged ... */
-    if (_groupNameCache.containsKey(groupId)) {
-      return _groupNameCache[groupId]!;
-    }
+    if (_groupNameCache.containsKey(groupId)) return _groupNameCache[groupId]!;
     try {
       final groupDoc = await FirebaseFirestore.instance
           .collection('groups')
           .doc(groupId)
           .get();
       if (groupDoc.exists) {
-        final name = groupDoc.data()?['groupName'] ?? 'Unknown Group';
+        final name = groupDoc.data()?['groupName'] ?? 'กลุ่มไม่มีชื่อ';
         _groupNameCache[groupId] = name;
         return name;
       }
     } catch (e) {
       print("Error getting group name for $groupId: $e");
     }
-    _groupNameCache[groupId] = 'Unknown Group';
-    return 'Unknown Group';
+    _groupNameCache[groupId] = 'กลุ่มไม่มีชื่อ';
+    return 'กลุ่มไม่มีชื่อ';
   }
 
   Future<void> _getGroupNames(List<String> groupIds) async {
-    /* ... unchanged ... */
     List<String> idsToFetch = [];
     for (String id in groupIds.toSet()) {
       if (!_groupNameCache.containsKey(id) && id.isNotEmpty) {
@@ -188,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
               .where(FieldPath.documentId, whereIn: batchIds)
               .get();
           for (var doc in querySnapshot.docs) {
-            final name = doc.data()['groupName'] ?? 'Unknown Group';
+            final name = doc.data()['groupName'] ?? 'กลุ่มไม่มีชื่อ';
             _groupNameCache[doc.id] = name;
           }
         }
@@ -197,15 +188,14 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
     for (String id in groupIds) {
-      _groupNameCache.putIfAbsent(id, () => 'Unknown Group');
+      _groupNameCache.putIfAbsent(id, () => 'กลุ่มไม่มีชื่อ');
     }
     if (idsToFetch.isNotEmpty && mounted) {
       setState(() {});
-    }
+    } // Trigger rebuild after fetching
   }
 
   void _logout() {
-    /* ... unchanged ... */
     FirebaseAuth.instance.signOut();
     if (mounted) {
       Navigator.pushAndRemoveUntil(
@@ -217,7 +207,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onItemTapped(int index) {
-    /* ... unchanged ... */
     if (index == _selectedIndex) return;
     setState(() => _selectedIndex = index);
     if (index == 0) {
@@ -234,7 +223,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showError(String message) {
-    /* ... unchanged ... */
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -249,7 +237,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    /* ... unchanged ... */
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
     final today = DateTime.now();
@@ -307,7 +294,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHeader(double screenWidth) {
-    /* ... unchanged ... */
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -333,29 +319,27 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+        // Updated Avatar
         CircleAvatar(
-          radius: screenWidth * 0.06, // Matches the size of the container
-          backgroundColor: Colors.grey.shade200, // Background if no image
-          // Display image from URL if available
+          radius: screenWidth * 0.06,
+          backgroundColor: Colors.grey.shade200,
           backgroundImage:
               (_profilePicUrl != null && _profilePicUrl!.isNotEmpty)
               ? NetworkImage(_profilePicUrl!)
               : null,
-          // Show icon only if there's no image URL
           child: (_profilePicUrl == null || _profilePicUrl!.isEmpty)
               ? Icon(
                   Icons.person,
                   size: screenWidth * 0.06,
                   color: Colors.grey.shade400,
                 )
-              : null, // Don't show icon if image is loading/loaded
+              : null,
         ),
       ],
     );
   }
 
   Widget _buildTodayLabel(String weekdayName, double screenWidth) {
-    /* ... unchanged ... */
     return Text(
       weekdayName,
       style: TextStyle(
@@ -367,7 +351,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- UPDATED: Content for Caretakers (Dashboard View) ---
+  // --- REFINED: Content for Caretakers (Grouped Dashboard) ---
   Widget _buildCaretakerContent(double screenWidth) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null)
@@ -396,7 +380,7 @@ class _HomeScreenState extends State<HomeScreen> {
             stream: FirebaseFirestore.instance
                 .collectionGroup('tasks')
                 .where('groupId', whereIn: joinedGroups)
-                .snapshots(), // Stream all tasks in groups
+                .snapshots(),
             builder: (context, taskSnapshot) {
               if (taskSnapshot.connectionState == ConnectionState.waiting)
                 return const Center(child: CircularProgressIndicator());
@@ -411,28 +395,23 @@ class _HomeScreenState extends State<HomeScreen> {
               final todayKey = DateFormat('yyyy-MM-dd').format(today);
               final todayWeekday = today.weekday;
 
-              // --- Process and Group Tasks ---
+              // --- Process, Group, and Categorize Tasks ---
               final Map<String, Map<String, List<Map<String, dynamic>>>>
               groupedCategorizedTasks = {};
-              final Set<String> usersToFetch =
-                  {}; // Collect user IDs to fetch names
+              final Set<String> usersToFetch = {};
 
               for (var doc in allTasks) {
                 final task = doc.data() as Map<String, dynamic>?;
                 if (task == null) continue;
                 final groupId = task['groupId'] as String?;
                 if (groupId == null || groupId.isEmpty) continue;
-
                 final type = task['taskType'] ?? '';
                 final status = task['status'] ?? '';
                 final assignedTo =
                     (task['assignedTo'] as List?)?.cast<String>() ?? [];
-                usersToFetch.addAll(assignedTo); // Add assignees to fetch list
+                usersToFetch.addAll(assignedTo);
                 final completedBy = task['completedBy'] as String?;
-                if (completedBy != null)
-                  usersToFetch.add(completedBy); // Add completer
-
-                // Initialize group map if needed
+                if (completedBy != null) usersToFetch.add(completedBy);
                 groupedCategorizedTasks.putIfAbsent(
                   groupId,
                   () => {
@@ -442,7 +421,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     'upcoming': [],
                   },
                 );
-
                 final Timestamp? ts = task['taskDateTime'];
                 DateTime? taskDate;
                 DateTime? taskDayOnly;
@@ -454,17 +432,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     taskDate.day,
                   );
                 }
-
                 bool isToday =
                     taskDayOnly != null && taskDayOnly.isAtSameMomentAs(today);
 
-                // Categorize
                 if (type == 'habit_schedule') {
                   groupedCategorizedTasks[groupId]!['habits']!.add({
                     'id': doc.id,
                     'data': task,
                   });
-                  // Also extract today's items for today's sections
+                  // Extract today's items
                   final schedule =
                       (task['schedule'] as Map?)
                           ?.cast<String, List<dynamic>>() ??
@@ -488,9 +464,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           '${todayKey}_${subTaskTime}_$subTaskTitle';
                       final isCompleted =
                           completionHistory[subTaskKey] == 'completed';
-                      // Find who completed this specific sub-task (more complex, maybe store completer per subtask?)
-                      // For now, use the main task's assignedTo list for display
-
                       final itemData = {
                         'type': 'habit_item',
                         'id': doc.id,
@@ -500,8 +473,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         'title': subTaskTitle,
                         'assignedTo': assignedTo,
                         'isCompleted': isCompleted,
-                      }; // Add assignedTo
-
+                        'data': task,
+                      }; // Pass main task data for context
                       if (isCompleted) {
                         groupedCategorizedTasks[groupId]!['completed_today']!
                             .add(itemData);
@@ -519,14 +492,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           .add({
                             'type': 'appointment',
                             'id': doc.id,
+                            'groupId': groupId,
                             'data': task,
                             'isCompleted': true,
                           });
                     } else {
-                      // pending
                       groupedCategorizedTasks[groupId]!['pending_today']!.add({
                         'type': 'appointment',
                         'id': doc.id,
+                        'groupId': groupId,
                         'data': task,
                         'isCompleted': false,
                       });
@@ -535,7 +509,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     groupedCategorizedTasks[groupId]!['upcoming']!.add({
                       'type': 'appointment',
                       'id': doc.id,
+                      'groupId': groupId,
                       'data': task,
+                    });
+                  } else if (taskDate != null &&
+                      taskDate.isBefore(today) &&
+                      status == 'pending') {
+                    // Overdue appointments - add to pending
+                    groupedCategorizedTasks[groupId]!['pending_today']!.add({
+                      'type': 'appointment',
+                      'id': doc.id,
+                      'groupId': groupId,
+                      'data': task,
+                      'isCompleted': false,
                     });
                   }
                 } else if (type == 'countdown') {
@@ -545,21 +531,25 @@ class _HomeScreenState extends State<HomeScreen> {
                     groupedCategorizedTasks[groupId]!['upcoming']!.add({
                       'type': 'countdown',
                       'id': doc.id,
+                      'groupId': groupId,
                       'data': task,
                     });
                   }
                 }
               }
 
-              // Fetch usernames for all collected IDs
-              _getUsernames(usersToFetch.toList()); // Fire and forget update
+              _getUsernames(usersToFetch.toList()); // Fetch names
 
-              // Sort items within categories (e.g., by time)
+              // Sort items within categories for each group
               groupedCategorizedTasks.forEach((groupId, categories) {
                 categories['pending_today']?.sort(_sortTaskItems);
-                categories['completed_today']?.sort(_sortTaskItems);
-                categories['upcoming']?.sort(_sortTaskItems);
-                // Habits don't need sorting here as they are summaries
+                categories['completed_today']?.sort(_sortCompletedItems);
+                categories['upcoming']?.sort(_sortUpcomingItems);
+                categories['habits']?.sort(
+                  (a, b) => (a['data']['title'] ?? '').compareTo(
+                    b['data']['title'] ?? '',
+                  ),
+                );
               });
 
               // Sort groups by name
@@ -570,13 +560,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 );
 
-              // Filter out groups with no relevant tasks to display today
+              // Filter out groups with no relevant tasks
               final relevantGroupIds = sortedGroupIds.where((groupId) {
                 final categories = groupedCategorizedTasks[groupId]!;
                 return categories['pending_today']!.isNotEmpty ||
                     categories['completed_today']!.isNotEmpty ||
-                    categories['habits']!
-                        .isNotEmpty || // Always show active habits
+                    categories['habits']!.isNotEmpty ||
                     categories['upcoming']!.isNotEmpty;
               }).toList();
 
@@ -604,7 +593,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: EdgeInsets.only(
                           top: index == 0 ? 0 : 24.0,
                           bottom: 10.0,
-                        ), // Add top space between groups
+                        ),
                         child: Text(
                           groupName,
                           style: TextStyle(
@@ -616,7 +605,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
 
-                      // Today's Pending Section
+                      // Sections for this group
                       if (pendingToday.isNotEmpty) ...[
                         _buildSectionHeader(
                           'วันนี้ (รอดำเนินการ)',
@@ -631,8 +620,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             )
                             .toList(),
                       ],
-
-                      // Today's Completed Section
                       if (completedToday.isNotEmpty) ...[
                         _buildSectionHeader(
                           'วันนี้ (เสร็จสิ้น)',
@@ -650,8 +637,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             )
                             .toList(),
                       ],
-
-                      // Active Habit Schedules Section
                       if (habits.isNotEmpty) ...[
                         _buildSectionHeader(
                           'กิจวัตรที่ใช้งานอยู่',
@@ -668,8 +653,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             )
                             .toList(),
                       ],
-
-                      // Upcoming Section
                       if (upcoming.isNotEmpty) ...[
                         _buildSectionHeader(
                           'งานที่กำลังจะมาถึง',
@@ -677,18 +660,24 @@ class _HomeScreenState extends State<HomeScreen> {
                           Colors.grey,
                           screenWidth,
                         ),
-                        ...upcoming.map((item) {
-                          final task = item['data'] as Map<String, dynamic>;
-                          final type = item['type'] as String;
-                          if (type == 'countdown')
-                            return _buildCountdownCard(task, screenWidth);
-                          // Must be appointment
-                          return _buildAppointmentCardReadOnly(
-                            task,
-                            screenWidth,
-                          );
-                        }).toList(),
+                        ...upcoming
+                            .map(
+                              (item) => item['type'] == 'countdown'
+                                  ? _buildCountdownCard(
+                                      item['data'],
+                                      screenWidth,
+                                    )
+                                  : _buildAppointmentCardReadOnly(
+                                      item['data'],
+                                      screenWidth,
+                                    ),
+                            )
+                            .toList(),
                       ],
+
+                      // Add a small divider between groups if desired
+                      if (index < relevantGroupIds.length - 1)
+                        const Divider(height: 30, thickness: 0.5),
                     ],
                   );
                 },
@@ -700,15 +689,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- Content for Care Receivers (Shows Today's Detailed Habits and Tasks) ---
+  // --- UPDATED: Content for Care Receivers (Grouped & Categorized) ---
   Widget _buildCareReceiverContent(double screenWidth) {
-    // ... (This function remains largely the same as the previous correct version) ...
-    // ... It correctly filters and displays todaysHabitItems and otherPendingTasks ...
     final user = FirebaseAuth.instance.currentUser;
     if (user == null)
       return const Expanded(child: Center(child: Text('ไม่พบผู้ใช้งาน')));
     final todayWeekday = DateTime.now().weekday;
     final todayDateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
     return Expanded(
       child: FutureBuilder<DocumentSnapshot>(
         future: FirebaseFirestore.instance
@@ -720,11 +708,14 @@ class _HomeScreenState extends State<HomeScreen> {
             return const Center(child: CircularProgressIndicator());
           if (!userSnapshot.hasData || !userSnapshot.data!.exists)
             return const Center(child: Text('ไม่พบข้อมูลผู้ใช้'));
+
           final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-          final List<dynamic> joinedGroups =
+          final List<String> joinedGroups =
               (userData['joinedGroups'] as List?)?.cast<String>() ?? [];
           if (joinedGroups.isEmpty) return _buildEmptyTaskList(screenWidth);
-          _getGroupNames(joinedGroups.cast<String>());
+
+          _getGroupNames(joinedGroups); // Pre-fetch names
+
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collectionGroup('tasks')
@@ -739,20 +730,40 @@ class _HomeScreenState extends State<HomeScreen> {
                   taskSnapshot.data == null ||
                   taskSnapshot.data!.docs.isEmpty)
                 return _buildEmptyTaskList(screenWidth);
+
               final allTasks = taskSnapshot.data!.docs;
-              final List<Map<String, dynamic>> todaysHabitItems = [];
+              // --- Process, Group, and Filter Tasks for CareReceiver ---
+              final Map<String, Map<String, List<Map<String, dynamic>>>>
+              groupedCategorizedTasks = {};
+
               for (var doc in allTasks) {
                 final task = doc.data() as Map<String, dynamic>?;
-                if (task == null || task['taskType'] != 'habit_schedule')
-                  continue;
-                final assignedToList =
+                if (task == null) continue;
+                final groupId = task['groupId'] as String?;
+                if (groupId == null || groupId.isEmpty) continue;
+                final type = task['taskType'] ?? '';
+                final status = task['status'] ?? '';
+                final assignedTo =
                     (task['assignedTo'] as List?)?.cast<String>() ?? [];
-                if (!assignedToList.contains(user.uid)) continue;
-                final scheduleMap =
-                    (task['schedule'] as Map?)?.cast<String, dynamic>() ?? {};
-                final dayKey = todayWeekday.toString();
-                if (scheduleMap.containsKey(dayKey)) {
-                  final tasksForTodayDynamic = scheduleMap[dayKey] as List?;
+
+                // Initialize group map
+                groupedCategorizedTasks.putIfAbsent(
+                  groupId,
+                  () => {
+                    'pending_habits': [],
+                    'pending_appointments': [],
+                    'upcoming_countdowns': [],
+                  },
+                );
+
+                // Categorize and Filter
+                if (type == 'habit_schedule' && assignedTo.contains(user.uid)) {
+                  final schedule =
+                      (task['schedule'] as Map?)
+                          ?.cast<String, List<dynamic>>() ??
+                      {};
+                  final tasksForTodayDynamic =
+                      schedule[todayWeekday.toString()];
                   if (tasksForTodayDynamic != null &&
                       tasksForTodayDynamic.isNotEmpty) {
                     final List<Map<String, String>> tasksForToday =
@@ -773,107 +784,170 @@ class _HomeScreenState extends State<HomeScreen> {
                       final isCompleted =
                           completionHistory[subTaskKey] == 'completed';
                       if (!isCompleted) {
-                        todaysHabitItems.add({
-                          'habitDocId': doc.id,
-                          'groupId': task['groupId'] ?? '',
-                          'subTaskKey': subTaskKey,
-                          'time': subTaskTime.startsWith('no_time')
-                              ? '--:--'
-                              : subTaskTime,
-                          'title': subTaskTitle.startsWith('no_title')
-                              ? 'ไม่มีชื่อ'
-                              : subTaskTitle,
-                        });
+                        groupedCategorizedTasks[groupId]!['pending_habits']!
+                            .add({
+                              'habitDocId': doc.id,
+                              'groupId': groupId,
+                              'subTaskKey': subTaskKey,
+                              'time': subTaskTime.startsWith('no_time')
+                                  ? '--:--'
+                                  : subTaskTime,
+                              'title': subTaskTitle.startsWith('no_title')
+                                  ? 'ไม่มีชื่อ'
+                                  : subTaskTitle,
+                            });
                       }
                     }
                   }
-                }
-              }
-              todaysHabitItems.sort((a, b) => a['time'].compareTo(b['time']));
-              final otherPendingTasks = allTasks.where((doc) {
-                final task = doc.data() as Map<String, dynamic>?;
-                if (task == null) return false;
-                final type = task['taskType'] ?? '';
-                final status = task['status'] ?? '';
-                if (type == 'habit_schedule' || status != 'pending')
-                  return false;
-                if (type == 'countdown') {
+                } else if (type == 'appointment' &&
+                    status == 'pending' &&
+                    assignedTo.contains(user.uid)) {
+                  groupedCategorizedTasks[groupId]!['pending_appointments']!
+                      .add({'id': doc.id, 'data': task});
+                } else if (type == 'countdown') {
                   final Timestamp? ts = task['taskDateTime'];
-                  if (ts == null) return false;
+                  if (ts == null) continue;
                   final taskDate = ts.toDate();
                   final now = DateTime.now();
                   final today = DateTime(now.year, now.month, now.day);
-                  return taskDate.isAtSameMomentAs(today) ||
-                      taskDate.isAfter(today);
+                  if (taskDate.isAtSameMomentAs(today) ||
+                      taskDate.isAfter(today)) {
+                    groupedCategorizedTasks[groupId]!['upcoming_countdowns']!
+                        .add({'id': doc.id, 'data': task});
+                  }
                 }
-                final assignedToList =
-                    (task['assignedTo'] as List?)?.cast<String>() ?? [];
-                return assignedToList.contains(user.uid);
-              }).toList();
-              otherPendingTasks.sort((a, b) {
-                final dataA = a.data() as Map<String, dynamic>?;
-                final dataB = b.data() as Map<String, dynamic>?;
-                final Timestamp? tsA = dataA?['taskDateTime'];
-                final Timestamp? tsB = dataB?['taskDateTime'];
-                if (tsA == null && tsB == null) return 0;
-                if (tsA == null) return 1;
-                if (tsB == null) return -1;
-                return tsA.compareTo(tsB);
+              }
+              // --- End Grouping ---
+
+              // Sort items within each group's categories
+              groupedCategorizedTasks.forEach((key, categories) {
+                categories['pending_habits']?.sort(
+                  (a, b) => (a['time'] ?? '99').compareTo(b['time'] ?? '99'),
+                );
+                categories['pending_appointments']?.sort(
+                  (a, b) =>
+                      (a['data']['taskDateTime'] as Timestamp?)?.compareTo(
+                        b['data']['taskDateTime'] as Timestamp? ??
+                            Timestamp.now(),
+                      ) ??
+                      0,
+                );
+                categories['upcoming_countdowns']?.sort(
+                  (a, b) =>
+                      (a['data']['taskDateTime'] as Timestamp?)?.compareTo(
+                        b['data']['taskDateTime'] as Timestamp? ??
+                            Timestamp.now(),
+                      ) ??
+                      0,
+                );
               });
-              if (todaysHabitItems.isEmpty && otherPendingTasks.isEmpty)
+
+              // Sort groups by name
+              final sortedGroupIds = groupedCategorizedTasks.keys.toList()
+                ..sort(
+                  (a, b) => (_groupNameCache[a] ?? 'Z').compareTo(
+                    _groupNameCache[b] ?? 'Z',
+                  ),
+                );
+
+              // Filter out groups with no relevant items for the receiver
+              final relevantGroupIds = sortedGroupIds.where((groupId) {
+                final categories = groupedCategorizedTasks[groupId]!;
+                return categories['pending_habits']!.isNotEmpty ||
+                    categories['pending_appointments']!.isNotEmpty ||
+                    categories['upcoming_countdowns']!.isNotEmpty;
+              }).toList();
+
+              if (relevantGroupIds.isEmpty)
                 return _buildEmptyTaskList(screenWidth);
-              return ListView(
+
+              // --- Build Grouped ListView for CareReceiver ---
+              return ListView.builder(
                 padding: const EdgeInsets.only(bottom: 120),
-                children: [
-                  if (todaysHabitItems.isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8.0, top: 4.0),
-                      child: Text(
-                        'กิจวัตรวันนี้',
-                        style: TextStyle(
-                          fontFamily: 'NotoLoopedThaiUI',
-                          fontSize: screenWidth * 0.05,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF374151),
+                itemCount: relevantGroupIds.length,
+                itemBuilder: (context, index) {
+                  final groupId = relevantGroupIds[index];
+                  final groupName = _groupNameCache[groupId] ?? 'Loading...';
+                  final categories = groupedCategorizedTasks[groupId]!;
+                  final pendingHabits = categories['pending_habits']!;
+                  final pendingAppointments =
+                      categories['pending_appointments']!;
+                  final upcomingCountdowns = categories['upcoming_countdowns']!;
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.only(
+                          top: index == 0 ? 0 : 24.0,
+                          bottom: 10.0,
+                        ),
+                        child: Text(
+                          groupName,
+                          style: TextStyle(
+                            fontFamily: 'NotoLoopedThaiUI',
+                            fontSize: screenWidth * 0.05,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black54,
+                          ),
                         ),
                       ),
-                    ),
-                    ...todaysHabitItems
-                        .map((item) => _buildHabitItemCard(item, screenWidth))
-                        .toList(),
-                    const SizedBox(height: 24),
-                  ],
-                  if (otherPendingTasks.isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8.0),
-                      child: Text(
-                        'งานอื่นๆ',
-                        style: TextStyle(
-                          fontFamily: 'NotoLoopedThaiUI',
-                          fontSize: screenWidth * 0.05,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF374151),
+
+                      // Display pending items combined or sectioned? Let's section.
+                      if (pendingHabits.isNotEmpty) ...[
+                        _buildSectionHeader(
+                          'กิจวัตรวันนี้',
+                          Icons.calendar_month_outlined,
+                          _habitColor,
+                          screenWidth,
                         ),
-                      ),
-                    ),
-                    ...otherPendingTasks
-                        .map((doc) {
-                          final task = doc.data() as Map<String, dynamic>?;
-                          if (task == null) return const SizedBox.shrink();
-                          final type = task['taskType'];
-                          if (type == 'countdown')
-                            return _buildCountdownCard(task, screenWidth);
-                          return _buildAppointmentCard(
-                            task,
-                            doc.id,
-                            screenWidth,
-                          );
-                        })
-                        .whereType<Widget>()
-                        .toList(),
-                  ],
-                ],
+                        ...pendingHabits
+                            .map(
+                              (item) => _buildHabitItemCard(item, screenWidth),
+                            )
+                            .toList(),
+                      ],
+                      if (pendingAppointments.isNotEmpty) ...[
+                        _buildSectionHeader(
+                          'นัดหมายวันนี้/ค้าง',
+                          Icons.event_available_outlined,
+                          _appointmentColor,
+                          screenWidth,
+                        ),
+                        ...pendingAppointments
+                            .map(
+                              (item) => _buildAppointmentCard(
+                                item['data'],
+                                item['id'],
+                                screenWidth,
+                              ),
+                            )
+                            .toList(),
+                      ],
+                      if (upcomingCountdowns.isNotEmpty) ...[
+                        _buildSectionHeader(
+                          'การนับถอยหลัง',
+                          Icons.hourglass_bottom_outlined,
+                          _countdownColor,
+                          screenWidth,
+                        ),
+                        ...upcomingCountdowns
+                            .map(
+                              (item) => _buildCountdownCard(
+                                item['data'],
+                                screenWidth,
+                              ),
+                            )
+                            .toList(),
+                      ],
+                      // Add a small divider between groups if desired
+                      if (index < relevantGroupIds.length - 1)
+                        const Divider(height: 30, thickness: 0.5),
+                    ],
+                  );
+                },
               );
+              // --- End Grouped ListView ---
             },
           );
         },
@@ -882,13 +956,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // --- WIDGETS FOR TASK CARDS ---
-
-  // Card for Appointments (CareReceiver - has complete button)
   Widget _buildAppointmentCard(
     Map<String, dynamic> task,
     String taskId,
     double screenWidth,
   ) {
+    /* ... unchanged ... */
     final taskTitle = task['title'] ?? 'ไม่มีชื่องาน';
     final groupId = task['groupId'] ?? '';
     final Timestamp? ts = task['taskDateTime'];
@@ -964,11 +1037,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Card for Appointments (Caretaker - read-only)
   Widget _buildAppointmentCardReadOnly(
     Map<String, dynamic> task,
     double screenWidth,
   ) {
+    /* ... unchanged ... */
     final taskTitle = task['title'] ?? 'ไม่มีชื่องาน';
     final Timestamp? ts = task['taskDateTime'];
     String date = '-';
@@ -978,7 +1051,6 @@ class _HomeScreenState extends State<HomeScreen> {
       date = DateFormat('d MMM y', 'th').format(dt);
       time = DateFormat('HH:mm').format(dt);
     }
-    // --- Added assigned user info ---
     final assignedToList = (task['assignedTo'] as List?)?.cast<String>() ?? [];
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1053,8 +1125,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Card for Countdowns (Both roles - read-only)
   Widget _buildCountdownCard(Map<String, dynamic> task, double screenWidth) {
+    /* ... unchanged ... */
     final taskTitle = task['title'] ?? 'ไม่มีชื่องาน';
     final Timestamp? ts = task['taskDateTime'];
     if (ts == null) return ListTile(title: Text('$taskTitle (Missing Date)'));
@@ -1109,11 +1181,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Card for Individual Habit Items (CareReceiver - has complete button)
   Widget _buildHabitItemCard(
     Map<String, dynamic> itemData,
     double screenWidth,
   ) {
+    /* ... unchanged ... */
     final title = itemData['title'] ?? '-';
     final time = itemData['time'] ?? '-';
     final habitDocId = itemData['habitDocId'] ?? '';
@@ -1181,11 +1253,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Summary Card for Habit Schedules (Caretaker)
   Widget _buildHabitScheduleSummaryCard(
     Map<String, dynamic> task,
     double screenWidth,
   ) {
+    /* ... unchanged ... */
     final title = task['title'] ?? 'กิจวัตร';
     final schedule = (task['schedule'] as Map?)?.cast<String, dynamic>() ?? {};
     final assigned = (task['assignedTo'] as List?)?.cast<String>() ?? [];
@@ -1269,18 +1341,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- NEW: Helper to build section headers ---
   Widget _buildSectionHeader(
     String title,
     IconData icon,
     Color color,
     double screenWidth,
   ) {
+    /* ... unchanged ... */
     return Padding(
-      padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
+      padding: const EdgeInsets.only(top: 16.0, bottom: 8.0, left: 4.0),
       child: Row(
         children: [
-          Icon(icon, color: color, size: screenWidth * 0.05),
+          Icon(icon, color: color.withOpacity(0.8), size: screenWidth * 0.05),
           const SizedBox(width: 8),
           Text(
             title,
@@ -1291,6 +1363,8 @@ class _HomeScreenState extends State<HomeScreen> {
               color: color,
             ),
           ),
+          const SizedBox(width: 4),
+          Expanded(child: Divider(color: color.withOpacity(0.3), thickness: 1)),
         ],
       ),
     );
@@ -1301,45 +1375,67 @@ class _HomeScreenState extends State<HomeScreen> {
     double screenWidth, {
     bool isCompleted = false,
   }) {
-    final String type = item['type'] ?? 'unknown';
-    String title = item['title'] ?? 'ไม่มีชื่อ';
+    final String type =
+        item['type'] ?? 'unknown'; // 'habit_item' or 'appointment'
+    String title = 'ไม่มีชื่อ';
     String time = '--:--';
     List<String> assignedToIds = [];
     IconData itemIcon = Icons.task_alt; // Default icon
     Color itemColor = Colors.grey;
+    String? completedByName; // Store completer name
 
+    // Extract details based on item type
     if (type == 'habit_item') {
       title = item['title'] ?? 'กิจวัตร';
       time = item['time'] ?? '--:--';
-      // Habits store assignedTo in the main doc, need to fetch it maybe?
-      // For now, let's assume 'assignedTo' might be passed in the item map if extracted earlier
+      // 'assignedTo' should be in the item map if extracted correctly
       assignedToIds = (item['assignedTo'] as List?)?.cast<String>() ?? [];
-      itemIcon = Icons.calendar_month;
-      itemColor = isCompleted ? _completedColor : _habitColor;
+      itemIcon = Icons.calendar_month_outlined; // Use outlined version
+      itemColor = isCompleted
+          ? _completedColor
+          : _habitColor; // Use state colors
+      // Get completer ID if stored in history (e.g., '2023-10-27_08:00_Meds_by') - Requires modification
+      // final String? completerId = item['data']?['completionHistory']?[item['subTaskKey']+'_by'];
+      // if (completerId != null) completedByName = _userNameCache[completerId];
     } else if (type == 'appointment') {
       final taskData = item['data'] as Map<String, dynamic>? ?? {};
       title = taskData['title'] ?? 'นัดหมาย';
       assignedToIds = (taskData['assignedTo'] as List?)?.cast<String>() ?? [];
       final Timestamp? ts = taskData['taskDateTime'];
       if (ts != null) {
-        time = DateFormat('HH:mm').format(ts.toDate());
+        time = DateFormat('HH:mm').format(ts.toDate()); // Format time
       }
-      itemIcon = Icons.event_available;
-      itemColor = isCompleted ? _completedColor : _appointmentColor;
+      itemIcon = Icons.event_available_outlined; // Use outlined version
+      itemColor = isCompleted
+          ? _completedColor
+          : _appointmentColor; // Use state colors
+      // Get completer name if the appointment is completed
+      if (isCompleted) {
+        final String? completerId = taskData['completedBy'];
+        if (completerId != null) {
+          completedByName = _userNameCache[completerId]; // Get from cache
+        }
+      }
     }
-    // Add cases for other types if needed
+    // Add cases for other types if needed (e.g., if you show countdowns here)
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 8), // Smaller margin
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 10,
+      ), // Adjust padding
       decoration: BoxDecoration(
-        color: isCompleted ? Colors.white.withOpacity(0.8) : Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        color: isCompleted
+            ? Colors.white.withOpacity(0.8)
+            : Colors.white, // Slightly faded if completed
+        borderRadius: BorderRadius.circular(8), // Smaller radius
         border: Border.all(
           color: itemColor.withOpacity(isCompleted ? 0.5 : 0.8),
-        ),
+        ), // Border matching color
         boxShadow: [
           BoxShadow(
+            // Subtle shadow
             color: Colors.black.withOpacity(0.04),
             blurRadius: 4,
             offset: const Offset(0, 1),
@@ -1348,7 +1444,11 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Row(
         children: [
-          Icon(itemIcon, color: itemColor, size: 20),
+          Icon(
+            isCompleted ? Icons.check_circle : itemIcon,
+            color: itemColor,
+            size: 20,
+          ), // Show check if completed
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1358,47 +1458,58 @@ class _HomeScreenState extends State<HomeScreen> {
                   title,
                   style: TextStyle(
                     fontFamily: 'NotoLoopedThaiUI',
-                    fontSize: 15,
+                    fontSize: 15, // Slightly smaller font
                     fontWeight: FontWeight.w600,
-                    decoration: isCompleted ? TextDecoration.lineThrough : null,
+                    decoration: isCompleted
+                        ? TextDecoration.lineThrough
+                        : null, // Strikethrough if completed
                     color: isCompleted ? Colors.grey[600] : Colors.black87,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                // Show assigned user(s)
-                if (assignedToIds.isNotEmpty)
-                  FutureBuilder<Map<String, String>>(
-                    future: _getUsernames(assignedToIds),
-                    builder: (context, snapshot) {
-                      String assignedText = 'สำหรับ: ...'; // Loading text
-                      if (snapshot.connectionState == ConnectionState.done &&
-                          snapshot.hasData) {
-                        assignedText =
-                            'สำหรับ: ${snapshot.data?.values.join(', ') ?? '?'}';
-                      }
-                      return Text(
-                        assignedText,
-                        style: TextStyle(
-                          fontFamily: 'NotoLoopedThaiUI',
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      );
-                    },
-                  ),
+                // Show assigned user(s) or completed by user
+                FutureBuilder<Map<String, String>>(
+                  future: _getUsernames(assignedToIds), // Fetch assignee names
+                  builder: (context, snapshot) {
+                    String detailText;
+                    if (isCompleted && completedByName != null) {
+                      detailText = 'เสร็จสิ้นโดย: $completedByName';
+                    } else if (!isCompleted &&
+                        snapshot.connectionState == ConnectionState.done &&
+                        snapshot.hasData) {
+                      // Show assignees if not completed
+                      detailText =
+                          'สำหรับ: ${snapshot.data?.values.join(', ') ?? '?'}';
+                    } else if (!isCompleted) {
+                      detailText = 'สำหรับ: ...'; // Loading assignees
+                    } else {
+                      detailText =
+                          'เสร็จสิ้นแล้ว'; // Fallback if completer name missing
+                    }
+                    return Text(
+                      detailText,
+                      style: TextStyle(
+                        fontFamily: 'NotoLoopedThaiUI',
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    );
+                  },
+                ),
               ],
             ),
           ),
           const SizedBox(width: 8),
+          // Display Time
           Text(
             time,
             style: TextStyle(
               fontFamily: 'NotoLoopedThaiUI',
               fontSize: 15,
-              color: itemColor,
+              color: itemColor, // Use item color
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -1407,25 +1518,100 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- Helper function to sort task items (used in Caretaker dashboard) ---
+  // --- Sorting Helpers ---
   int _sortTaskItems(Map<String, dynamic> a, Map<String, dynamic> b) {
+    /* ... unchanged ... */
+    String tA = "99:99";
+    Timestamp? tsA;
+    String tB = "99:99";
+    Timestamp? tsB;
+    if (a['type'] == 'habit_item') tA = a['time'] ?? '99:99';
+    if (a['type'] == 'appointment') tsA = a['data']?['taskDateTime'];
+    if (b['type'] == 'habit_item') tB = b['time'] ?? '99:99';
+    if (b['type'] == 'appointment') tsB = b['data']?['taskDateTime'];
+    if (tsA != null && tsB != null) {
+      final dtA = tsA.toDate();
+      final dtB = tsB.toDate();
+      if (dtA.year != dtB.year) return dtA.year.compareTo(dtB.year);
+      if (dtA.month != dtB.month) return dtA.month.compareTo(dtB.month);
+      if (dtA.day != dtB.day) return dtA.day.compareTo(dtB.day);
+      return dtA.hour * 60 + dtA.minute.compareTo(dtB.hour * 60 + dtB.minute);
+    }
+    if (tsA != null) return -1;
+    if (tsB != null) return 1;
+    return tA.compareTo(tB);
+  }
+
+  int _sortCompletedItems(Map<String, dynamic> a, Map<String, dynamic> b) {
+    /* ... unchanged ... */
+    Timestamp? completedA = a['data']?['completedAt'];
+    Timestamp? completedB = b['data']?['completedAt'];
+    if (completedA != null && completedB != null)
+      return completedB.compareTo(completedA);
+    if (completedA != null) return -1;
+    if (completedB != null) return 1;
+    return _sortPendingItems(a, b);
+  }
+
+  int _sortUpcomingItems(Map<String, dynamic> a, Map<String, dynamic> b) {
+    /* ... unchanged ... */
+    Timestamp? tsA = a['data']?['taskDateTime'];
+    Timestamp? tsB = b['data']?['taskDateTime'];
+    if (tsA == null && tsB == null) return 0;
+    if (tsA == null) return 1;
+    if (tsB == null) return -1;
+    return tsA.compareTo(tsB);
+  }
+
+  int _sortPendingItems(Map<String, dynamic> a, Map<String, dynamic> b) {
     String timeA = "99:99";
     Timestamp? tsA;
     String timeB = "99:99";
     Timestamp? tsB;
 
+    // Extract time string for habits, timestamp for appointments
     if (a['type'] == 'habit_item') timeA = a['time'] ?? '99:99';
     if (a['type'] == 'appointment') tsA = a['data']?['taskDateTime'];
-
     if (b['type'] == 'habit_item') timeB = b['time'] ?? '99:99';
     if (b['type'] == 'appointment') tsB = b['data']?['taskDateTime'];
 
-    // Sort primarily by date if available (appointments)
-    if (tsA != null && tsB != null) return tsA.compareTo(tsB);
-    if (tsA != null) return -1; // Appointments first
-    if (tsB != null) return 1;
+    // Prioritize overdue appointments first
+    DateTime? dateA = tsA?.toDate();
+    DateTime? dateB = tsB?.toDate();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    bool aIsPast = dateA != null && dateA.isBefore(today);
+    bool bIsPast = dateB != null && dateB.isBefore(today);
+    if (aIsPast != bIsPast) return aIsPast ? -1 : 1; // Overdue items come first
 
-    // Sort by time string (habits)
+    // Sort appointments primarily by timestamp (date then time)
+    if (tsA != null && tsB != null) {
+      int dateComparison = tsA.compareTo(tsB);
+      if (dateComparison != 0) return dateComparison;
+      // If same date, sort by time part (though timestamp comparison already does this)
+    }
+    // If comparing appointment and habit, appointment generally comes first unless habit time is earlier on the same day
+    if (tsA != null && dateA != null) {
+      // a is appointment
+      final dtA = dateA;
+      if (b['type'] == 'habit_item' && dtA.isAtSameMomentAs(today)) {
+        // Compare appointment time with habit time string for today
+        final timeStrA = DateFormat('HH:mm').format(dtA);
+        return timeStrA.compareTo(timeB);
+      }
+      return -1; // Appointment comes before habit on different days or future
+    }
+    if (tsB != null && dateB != null) {
+      // b is appointment
+      final dtB = dateB;
+      if (a['type'] == 'habit_item' && dtB.isAtSameMomentAs(today)) {
+        final timeStrB = DateFormat('HH:mm').format(dtB);
+        return timeA.compareTo(timeStrB);
+      }
+      return 1; // Appointment comes before habit
+    }
+
+    // If both are habits or timestamps are null, sort by time string
     return timeA.compareTo(timeB);
   }
 
@@ -1481,7 +1667,7 @@ class _HomeScreenState extends State<HomeScreen> {
             borderRadius: BorderRadius.circular(16),
           ),
           title: const Text(
-            'ยืนยืนการทำเสร็จสิ้น',
+            'ยืนยันการทำเสร็จสิ้น',
             style: TextStyle(
               fontFamily: 'NotoLoopedThaiUI',
               fontWeight: FontWeight.bold,
@@ -1572,7 +1758,7 @@ class _HomeScreenState extends State<HomeScreen> {
             borderRadius: BorderRadius.circular(16),
           ),
           title: const Text(
-            'ยืนยืนการทำเสร็จสิ้น',
+            'ยืนยันการทำเสร็จสิ้น',
             style: TextStyle(
               fontFamily: 'NotoLoopedThaiUI',
               fontWeight: FontWeight.bold,
