@@ -2,7 +2,6 @@
 
 import 'dart:io'; // Import for File
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart'; // Import Storage
@@ -22,10 +21,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
-  // --- NEW: State for image file ---
-  XFile? _imageFile; // image_picker returns XFile
-  final ImagePicker _picker = ImagePicker(); // Instance of image picker
-  // --- END NEW ---
+  XFile? _imageFile;
+  final ImagePicker _picker = ImagePicker();
 
   bool _isLoading = false;
 
@@ -33,13 +30,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     return _usernameController.text.trim().isNotEmpty && !_isLoading;
   }
 
-  // --- UPDATED: Image selection logic ---
   Future<void> _pickImage(ImageSource source) async {
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        maxWidth: 800, // Optional: Resize image
-        imageQuality: 70, // Optional: Compress image
+        maxWidth: 800,
+        imageQuality: 70,
       );
       if (pickedFile != null && mounted) {
         setState(() {
@@ -47,7 +43,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         });
       }
     } catch (e) {
-      print("Error picking image: $e");
       _showError("เกิดข้อผิดพลาดในการเลือกรูปภาพ: $e");
     }
   }
@@ -90,7 +85,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     label: 'กล้อง',
                     onTap: () {
                       Navigator.pop(context);
-                      _pickImage(ImageSource.camera); // <-- Use _pickImage
+                      _pickImage(ImageSource.camera);
                     },
                   ),
                   _buildImageOption(
@@ -98,7 +93,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     label: 'แกลเลอรี่',
                     onTap: () {
                       Navigator.pop(context);
-                      _pickImage(ImageSource.gallery); // <-- Use _pickImage
+                      _pickImage(ImageSource.gallery);
                     },
                   ),
                 ],
@@ -116,7 +111,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     required String label,
     required VoidCallback onTap,
   }) {
-    // ... (This widget is unchanged) ...
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -125,7 +119,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: const Color(0xFF2E88F3).withOpacity(0.1),
+              color: const Color(0xFF2E88F3).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(30),
             ),
             child: Icon(icon, size: 30, color: const Color(0xFF2E88F3)),
@@ -144,35 +138,23 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     );
   }
 
-  // --- NEW: Function to upload image to Firebase Storage ---
   Future<String?> _uploadImageToStorage(XFile imageFile, String userId) async {
     try {
-      // Create a unique file name (e.g., using userId and timestamp)
       final String fileName =
           'profile_pics/${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final Reference storageRef = FirebaseStorage.instance.ref().child(
         fileName,
       );
-
-      // Upload the file
-      final UploadTask uploadTask = storageRef.putFile(
-        File(imageFile.path),
-      ); // Convert XFile to File
-
-      // Get download URL after upload completes
+      final UploadTask uploadTask = storageRef.putFile(File(imageFile.path));
       final TaskSnapshot snapshot = await uploadTask;
       final String downloadUrl = await snapshot.ref.getDownloadURL();
-      print("Image uploaded successfully: $downloadUrl");
       return downloadUrl;
     } catch (e) {
-      print("Error uploading image: $e");
       _showError("เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ: $e");
-      return null; // Return null if upload fails
+      return null;
     }
   }
-  // --- END NEW ---
 
-  // --- UPDATED: Save profile data including profile picture URL ---
   void _completeSetup() async {
     if (!_isFormValid) return;
     setState(() {
@@ -184,34 +166,25 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       if (user == null) throw Exception("User not logged in.");
 
       final db = FirebaseFirestore.instance;
-      String? profilePicUrl; // Variable to hold the URL
+      String? profilePicUrl;
 
-      // --- Upload image if one was selected ---
       if (_imageFile != null) {
         profilePicUrl = await _uploadImageToStorage(_imageFile!, user.uid);
         if (profilePicUrl == null) {
-          // Handle upload failure (maybe prevent saving profile?)
           setState(() {
             _isLoading = false;
           });
-          return; // Stop if upload failed
+          return;
         }
       }
-      // --- End image upload ---
 
-      // Update the user document in Firestore
       await db.collection('users').doc(user.uid).update({
         'username': _usernameController.text.trim(),
         'description': _descriptionController.text.trim(),
-        // Only add/update the URL if upload was successful
         if (profilePicUrl != null) 'profilePicUrl': profilePicUrl,
         'profileLastUpdated': FieldValue.serverTimestamp(),
       });
 
-      print('Profile setup completed for user: ${user.uid}');
-      if (profilePicUrl != null) print('Profile Pic URL: $profilePicUrl');
-
-      // Navigate to Role Selection screen
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -219,7 +192,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         );
       }
     } catch (e) {
-      print('Error completing profile setup: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -242,220 +214,267 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     );
   }
 
+  // --- UPDATED BUILD METHOD ---
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      resizeToAvoidBottomInset: true,
+      resizeToAvoidBottomInset: true, // Use true with SingleChildScrollView
       body: SafeArea(
         child: Stack(
           children: [
+            // Background circles will now stay positioned relative to the Stack
             Positioned(
               bottom: -screenWidth * 0.18,
               left: -screenWidth * 0.2,
               child: const BottomBackgroundCircles(),
             ),
-            SingleChildScrollView(
-              padding: EdgeInsets.only(
-                left: screenWidth * 0.1,
-                right: screenWidth * 0.1,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-                top: screenHeight * 0.05,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'ตั้งค่าโปรไฟล์',
-                    style: TextStyle(
-                      fontFamily: 'NotoLoopedThaiUI',
-                      fontSize: screenWidth * 0.08,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF2E88F3),
-                    ),
-                  ),
-                  SizedBox(height: screenHeight * 0.01),
-                  Text(
-                    'กรุณากรอกข้อมูลเพื่อสร้างโปรไฟล์ของคุณ',
-                    style: TextStyle(
-                      fontFamily: 'NotoLoopedThaiUI',
-                      fontSize: screenWidth * 0.04,
-                      color: const Color(0xFF6B7280),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: screenHeight * 0.04),
 
-                  // --- UPDATED Profile Image Section ---
-                  GestureDetector(
-                    onTap: _selectProfileImage,
-                    child: CircleAvatar(
-                      radius: screenWidth * 0.18, // Make it larger
-                      backgroundColor: Colors.grey.shade200, // Background color
-                      // --- Show picked image or placeholder ---
-                      backgroundImage: _imageFile != null
-                          ? FileImage(
-                              File(_imageFile!.path),
-                            ) // Display selected File image
-                          : null, // No background image if no file
-                      child: _imageFile == null
-                          ? Column(
-                              // Placeholder icon/text
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.add_a_photo_outlined,
-                                  size: screenWidth * 0.1,
-                                  color: Colors.grey.shade400,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'เพิ่มรูป',
-                                  style: TextStyle(
-                                    fontFamily: 'NotoLoopedThaiUI',
-                                    fontSize: screenWidth * 0.03,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                ),
-                              ],
-                            )
-                          : null, // Don't show icon/text if image is selected
-                    ),
+            // LayoutBuilder provides the available screen height
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  // Padding is now inside the scroll view
+                  padding: EdgeInsets.only(
+                    left: screenWidth * 0.1,
+                    right: screenWidth * 0.1,
+                    bottom: MediaQuery.of(
+                      context,
+                    ).viewInsets.bottom, // Moves with keyboard
                   ),
-
-                  // --- END UPDATED ---
-                  SizedBox(height: screenHeight * 0.04),
-                  Container(
-                    // Form Container
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                  child: ConstrainedBox(
+                    // Force the column to be AT LEAST as tall as the viewport
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
                     ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      // This Column now controls the main layout
+                      mainAxisAlignment: MainAxisAlignment
+                          .spaceBetween, // Pushes top/bottom apart
                       children: [
-                        // Username
-                        Text(
-                          'ชื่อผู้ใช้ *',
-                          style: TextStyle(
-                            fontFamily: 'NotoLoopedThaiUI',
-                            fontSize: screenWidth * 0.04,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF374151),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _usernameController,
-                          onChanged: (_) => setState(() {}),
-                          textInputAction: TextInputAction.next,
-                          decoration: InputDecoration(
-                            hintText: 'กรอกชื่อที่ต้องการให้แสดง',
-                            hintStyle: TextStyle(
-                              fontFamily: 'NotoLoopedThaiUI',
-                              color: Colors.grey[400],
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey[400]!),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey[400]!),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(
-                                color: Color(0xFF2E88F3),
-                                width: 2,
+                        // --- TOP CONTENT ---
+                        // This column holds the form elements
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              height: constraints.maxHeight * 0.05,
+                            ), // Relative spacing
+                            Text(
+                              'ตั้งค่าโปรไฟล์',
+                              style: TextStyle(
+                                fontFamily: 'NotoLoopedThaiUI',
+                                fontSize: screenWidth * 0.08,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF2E88F3),
                               ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        // Description
-                        Text(
-                          'คำอธิบายเกี่ยวกับตัวคุณ',
-                          style: TextStyle(
-                            fontFamily: 'NotoLoopedThaiUI',
-                            fontSize: screenWidth * 0.04,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF374151),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _descriptionController,
-                          maxLines: 3,
-                          maxLength: 150,
-                          textInputAction: TextInputAction.done,
-                          decoration: InputDecoration(
-                            hintText: 'เล่าเกี่ยวกับตัวคุณสั้นๆ (ไม่บังคับ)',
-                            hintStyle: TextStyle(
-                              fontFamily: 'NotoLoopedThaiUI',
-                              color: Colors.grey[400],
+                            SizedBox(height: constraints.maxHeight * 0.01),
+                            Text(
+                              'กรุณากรอกข้อมูลเพื่อสร้างโปรไฟล์ของคุณ',
+                              style: TextStyle(
+                                fontFamily: 'NotoLoopedThaiUI',
+                                fontSize: screenWidth * 0.04,
+                                color: const Color(0xFF6B7280),
+                              ),
+                              textAlign: TextAlign.center,
                             ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey[400]!),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey[400]!),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(
-                                color: Color(0xFF2E88F3),
-                                width: 2,
+                            SizedBox(height: constraints.maxHeight * 0.04),
+
+                            // Profile Image Section
+                            GestureDetector(
+                              onTap: _selectProfileImage,
+                              child: CircleAvatar(
+                                radius: screenWidth * 0.18,
+                                backgroundColor: Colors.grey.shade200,
+                                backgroundImage: _imageFile != null
+                                    ? FileImage(File(_imageFile!.path))
+                                    : null,
+                                child: _imageFile == null
+                                    ? Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.add_a_photo_outlined,
+                                            size: screenWidth * 0.1,
+                                            color: Colors.grey.shade400,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'เพิ่มรูป',
+                                            style: TextStyle(
+                                              fontFamily: 'NotoLoopedThaiUI',
+                                              fontSize: screenWidth * 0.03,
+                                              color: Colors.grey.shade500,
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : null,
                               ),
                             ),
-                            counterStyle: const TextStyle(
-                              fontFamily: 'NotoLoopedThaiUI',
-                              fontSize: 12,
+                            SizedBox(height: constraints.maxHeight * 0.04),
+
+                            // Form Container
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Username
+                                  Text(
+                                    'ชื่อผู้ใช้ *',
+                                    style: TextStyle(
+                                      fontFamily: 'NotoLoopedThaiUI',
+                                      fontSize: screenWidth * 0.04,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF374151),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _usernameController,
+                                    onChanged: (_) => setState(() {}),
+                                    textInputAction: TextInputAction.next,
+                                    decoration: InputDecoration(
+                                      hintText: 'กรอกชื่อที่ต้องการให้แสดง',
+                                      hintStyle: TextStyle(
+                                        fontFamily: 'NotoLoopedThaiUI',
+                                        color: Colors.grey[400],
+                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 12,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Colors.grey[400]!,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Colors.grey[400]!,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: const BorderSide(
+                                          color: Color(0xFF2E88F3),
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  // Description
+                                  Text(
+                                    'คำอธิบายเกี่ยวกับตัวคุณ',
+                                    style: TextStyle(
+                                      fontFamily: 'NotoLoopedThaiUI',
+                                      fontSize: screenWidth * 0.04,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF374151),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _descriptionController,
+                                    maxLines: 3,
+                                    maxLength: 150,
+                                    textInputAction: TextInputAction.done,
+                                    decoration: InputDecoration(
+                                      hintText:
+                                          'เล่าเกี่ยวกับตัวคุณสั้นๆ (ไม่บังคับ)',
+                                      hintStyle: TextStyle(
+                                        fontFamily: 'NotoLoopedThaiUI',
+                                        color: Colors.grey[400],
+                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 12,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Colors.grey[400]!,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Colors.grey[400]!,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: const BorderSide(
+                                          color: Color(0xFF2E88F3),
+                                          width: 2,
+                                        ),
+                                      ),
+                                      counterStyle: const TextStyle(
+                                        fontFamily: 'NotoLoopedThaiUI',
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
+                          ],
                         ),
+                        // --- END TOP CONTENT ---
+
+                        // --- BOTTOM BUTTON ---
+                        // This will be pushed to the bottom by MainAxisAlignment.spaceBetween
+                        Padding(
+                          padding: EdgeInsets.only(
+                            top:
+                                constraints.maxHeight *
+                                0.05, // Space above button
+                            bottom:
+                                constraints.maxHeight *
+                                0.05, // Space below button
+                          ),
+                          child: _isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : CustomButton(
+                                  text: 'สร้างโปรไฟล์',
+                                  isEnabled: _isFormValid,
+                                  onPressed: _completeSetup,
+                                ),
+                        ),
+                        // --- END BOTTOM BUTTON ---
                       ],
                     ),
                   ),
-                  SizedBox(height: screenHeight * 0.05),
-                  // Button
-                  if (_isLoading)
-                    const CircularProgressIndicator()
-                  else
-                    CustomButton(
-                      text: 'สร้างโปรไฟล์',
-                      isEnabled: _isFormValid,
-                      onPressed: _completeSetup,
-                    ),
-                ],
-              ),
+                );
+              },
             ),
           ],
         ),
       ),
     );
   }
+  // --- END UPDATED BUILD METHOD ---
 
   @override
   void dispose() {

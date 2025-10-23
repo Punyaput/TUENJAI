@@ -72,7 +72,6 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      print("Error creating group: $e");
       setState(() {
         _isLoading = false;
       });

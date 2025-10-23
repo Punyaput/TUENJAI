@@ -6,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/background_circles.dart';
 import './create_task_screen.dart'; // Used for creating AND editing
 import './group_settings_screen.dart';
-import './edit_schedule_screen.dart'; // Needed if you add a direct edit schedule button
+import './edit_schedule_screen.dart'; // (Optional) Needed for direct edit schedule button
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -56,39 +56,20 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             _userRole = userDoc.data()?['role'];
           });
         }
-      } catch (e) {
-        print("Error fetching user role: $e");
-      }
+        // ignore: empty_catches
+      } catch (e) {}
     }
-  }
-
-  // --- Username Fetching Helpers (Copied from HomeScreen) ---
-  Future<String> _getUsername(String userId) async {
-    if (_userNameCache.containsKey(userId)) return _userNameCache[userId]!;
-    try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .get();
-      if (userDoc.exists) {
-        final name = userDoc.data()?['username'] ?? 'Unknown User';
-        _userNameCache[userId] = name;
-        return name;
-      }
-    } catch (e) {
-      print("Error getting username for $userId: $e");
-    }
-    return 'Unknown User';
   }
 
   Future<Map<String, String>> _getUsernames(List<String> userIds) async {
     Map<String, String> names = {};
     List<String> idsToFetch = [];
     for (String id in userIds.toSet()) {
-      if (!_userNameCache.containsKey(id) && id.isNotEmpty)
+      if (!_userNameCache.containsKey(id) && id.isNotEmpty) {
         idsToFetch.add(id);
-      else if (_userNameCache.containsKey(id))
+      } else if (_userNameCache.containsKey(id)) {
         names[id] = _userNameCache[id]!;
+      }
     }
     if (idsToFetch.isNotEmpty) {
       try {
@@ -109,7 +90,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           }
         }
       } catch (e) {
-        print("Error getting usernames: $e");
+        // Ignore individual fetch errors
       }
     }
     for (String id in userIds) {
@@ -230,12 +211,15 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting)
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError)
+        }
+        if (snapshot.hasError) {
           return Center(child: Text('เกิดข้อผิดพลาด: ${snapshot.error}'));
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return _buildEmptyTasksList();
+        }
 
         final taskDocs = snapshot.data!.docs;
         final currentUser = FirebaseAuth.instance.currentUser;
@@ -276,11 +260,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           bool relevantForReceiver = true;
           if (_userRole == 'carereceiver') {
             relevantForReceiver = false;
-            if (type == 'appointment' && assignedTo.contains(currentUser?.uid))
+            if (type == 'appointment' &&
+                assignedTo.contains(currentUser?.uid)) {
               relevantForReceiver = true;
+            }
             if (type == 'habit_schedule' &&
-                assignedTo.contains(currentUser?.uid))
+                assignedTo.contains(currentUser?.uid)) {
               relevantForReceiver = true;
+            }
             if (type == 'countdown') relevantForReceiver = true;
             if (!relevantForReceiver) continue;
           }
@@ -423,8 +410,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   .where((item) {
                     // Filter receiver view *again* just to be safe
                     if (_userRole == 'carereceiver' &&
-                        item['type'] == 'habit_item')
+                        item['type'] == 'habit_item') {
                       return false; // Receiver sees habits on Home
+                    }
                     return true;
                   })
                   .map((item) {
@@ -448,8 +436,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           : null,
                       child: card,
                     );
-                  })
-                  .toList(),
+                  }),
             ],
 
             // --- Active Habit Schedules Section ---
@@ -460,20 +447,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 _habitColor,
                 screenWidth,
               ),
-              ...activeHabits
-                  .map(
-                    (item) => InkWell(
-                      onLongPress: _userRole == 'caretaker'
-                          ? () => _showDeleteTaskDialog(
-                              context,
-                              item['id'],
-                              item['data']?['title'] ?? 'งานนี้',
-                            )
-                          : null,
-                      child: _buildHabitScheduleCard(item['data'], item['id']),
-                    ),
-                  )
-                  .toList(),
+              ...activeHabits.map(
+                (item) => InkWell(
+                  onLongPress: _userRole == 'caretaker'
+                      ? () => _showDeleteTaskDialog(
+                          context,
+                          item['id'],
+                          item['data']?['title'] ?? 'งานนี้',
+                        )
+                      : null,
+                  child: _buildHabitScheduleCard(item['data'], item['id']),
+                ),
+              ),
             ],
 
             // --- Upcoming Countdowns Section ---
@@ -484,20 +469,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 _countdownColor,
                 screenWidth,
               ),
-              ...upcomingCountdowns
-                  .map(
-                    (item) => InkWell(
-                      onLongPress: _userRole == 'caretaker'
-                          ? () => _showDeleteTaskDialog(
-                              context,
-                              item['id'],
-                              item['data']?['title'] ?? 'งานนี้',
-                            )
-                          : null,
-                      child: _buildCountdownCard(item['data'], item['id']),
-                    ),
-                  )
-                  .toList(),
+              ...upcomingCountdowns.map(
+                (item) => InkWell(
+                  onLongPress: _userRole == 'caretaker'
+                      ? () => _showDeleteTaskDialog(
+                          context,
+                          item['id'],
+                          item['data']?['title'] ?? 'งานนี้',
+                        )
+                      : null,
+                  child: _buildCountdownCard(item['data'], item['id']),
+                ),
+              ),
             ],
 
             // --- Completed Section (Caretaker Only) ---
@@ -534,7 +517,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       : null,
                   child: card,
                 );
-              }).toList(),
+              }),
             ],
           ],
         );
@@ -570,8 +553,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     /* ... unchanged ... */
     Timestamp? completedA = a['data']?['completedAt'];
     Timestamp? completedB = b['data']?['completedAt'];
-    if (completedA != null && completedB != null)
+    if (completedA != null && completedB != null) {
       return completedB.compareTo(completedA);
+    }
     if (completedA != null) return -1;
     if (completedB != null) return 1;
     return _sortPendingItems(a, b);
@@ -599,7 +583,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       padding: const EdgeInsets.only(top: 20.0, bottom: 10.0),
       child: Row(
         children: [
-          Icon(icon, color: color.withOpacity(0.8), size: screenWidth * 0.05),
+          Icon(
+            icon,
+            color: color.withValues(alpha: 0.8),
+            size: screenWidth * 0.05,
+          ),
           const SizedBox(width: 8),
           Text(
             title,
@@ -611,7 +599,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             ),
           ),
           const SizedBox(width: 4),
-          Expanded(child: Divider(color: color.withOpacity(0.3), thickness: 1)),
+          Expanded(
+            child: Divider(color: color.withValues(alpha: 0.3), thickness: 1),
+          ),
         ],
       ),
     );
@@ -631,12 +621,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.only(left: 16, top: 16, bottom: 16, right: 8),
       decoration: BoxDecoration(
-        color: isCompleted ? Colors.white.withOpacity(0.7) : Colors.white,
+        color: isCompleted ? Colors.white.withValues(alpha: 0.7) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _appointmentColor.withOpacity(0.3)),
+        border: Border.all(color: _appointmentColor.withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -720,7 +710,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         border: Border.all(color: _countdownColor, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -769,8 +759,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     final assigned = (task['assignedTo'] as List?)?.cast<String>() ?? [];
     List<String> days = [];
     for (int i = 1; i <= 7; i++) {
-      if ((schedule[i.toString()] as List?)?.isNotEmpty ?? false)
+      if ((schedule[i.toString()] as List?)?.isNotEmpty ?? false) {
         days.add(_dayLabelsShort[i - 1]);
+      }
     }
     final repeat = days.isNotEmpty ? 'ทำซ้ำ ${days.join(", ")}' : '-';
     final assignedCount = assigned.length;
@@ -780,10 +771,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _habitColor.withOpacity(0.4), width: 2),
+        border: Border.all(color: _habitColor.withValues(alpha: 0.4), width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -858,16 +849,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: isCompleted ? Colors.white.withOpacity(0.8) : Colors.white,
+        color: isCompleted ? Colors.white.withValues(alpha: 0.8) : Colors.white,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: (isCompleted ? _completedColor : _habitColor).withOpacity(
-            isCompleted ? 0.5 : 0.8,
+          color: (isCompleted ? _completedColor : _habitColor).withValues(
+            alpha: isCompleted ? 0.5 : 0.8,
           ),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -990,7 +981,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         );
       }
     } catch (e) {
-      print("Error deleting task: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

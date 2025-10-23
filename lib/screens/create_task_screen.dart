@@ -1,7 +1,6 @@
 // lib/screens/create_task_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
@@ -136,11 +135,12 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       if (!groupDoc.exists) throw Exception("Group not found");
       final List<dynamic> memberIds = groupDoc.data()?['members'] ?? [];
       if (memberIds.isEmpty) {
-        if (mounted)
+        if (mounted) {
           setState(() {
             _isLoadingMembers = false;
           });
-        return;
+          return;
+        }
       }
 
       final usersQuery = await FirebaseFirestore.instance
@@ -158,17 +158,18 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         // Initialize selection state respecting pre-population
         _selectedReceivers.putIfAbsent(doc.id, () => false);
       }
-      if (mounted)
+      if (mounted) {
         setState(() {
           _careReceivers = receivers;
           _isLoadingMembers = false;
         });
+      }
     } catch (e) {
-      print("Error fetching members: $e");
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isLoadingMembers = false;
         });
+      }
     }
   }
 
@@ -218,7 +219,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     if (result != null && mounted) {
       setState(() {
         _habitSchedule = result;
-        print("Schedule Updated locally from EditScreen: $_habitSchedule");
       });
     }
   }
@@ -346,8 +346,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           dataToSave.remove('schedule');
           dataToSave.remove('completionHistory');
         }
-
-        print("Updating task ${widget.taskId} with data: $dataToSave");
         await taskDocRef.update(dataToSave);
       } else {
         // --- ADD ---
@@ -358,7 +356,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             : 'pending';
         dataToSave['taskType'] = taskTypeString; // Set type only on creation
 
-        print("Adding new task with data: $dataToSave");
         await taskDocRef.set(dataToSave);
       }
 
@@ -366,7 +363,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         Navigator.pop(context);
       } // Go back after success
     } catch (e) {
-      print("Error saving/updating task: $e");
       _showError("เกิดข้อผิดพลาด: $e");
     } finally {
       if (mounted) {
@@ -560,7 +556,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -703,8 +699,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         return 'เช่น "วันเกิดคุณยาย"';
       case TaskType.habit:
         return 'เช่น "กิจวัตรช่วงเช้า"';
-      default:
-        return 'ชื่องาน';
     }
   }
 
@@ -821,7 +815,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),

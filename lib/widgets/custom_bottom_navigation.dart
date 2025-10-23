@@ -20,7 +20,7 @@ class CustomBottomNavigation extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -71,7 +71,9 @@ class CustomBottomNavigation extends StatelessWidget {
               width: 48,
               height: 32,
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF2E88F3) : Colors.transparent,
+                color: isSelected
+                    ? const Color(0xFF2E88F3)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(
@@ -87,7 +89,9 @@ class CustomBottomNavigation extends StatelessWidget {
                 fontFamily: 'NotoLoopedThaiUI',
                 fontSize: screenWidth * 0.03,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected ? const Color(0xFF2E88F3) : const Color(0xFF9CA3AF),
+                color: isSelected
+                    ? const Color(0xFF2E88F3)
+                    : const Color(0xFF9CA3AF),
               ),
             ),
           ],

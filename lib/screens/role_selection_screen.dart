@@ -37,7 +37,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
       //    We are 'updating' the user document we created earlier.
       await db.collection('users').doc(user.uid).update({
         'role': role, // This is the all-important field!
-        'createdAt': FieldValue.serverTimestamp(), // Good to know when they joined
+        'createdAt':
+            FieldValue.serverTimestamp(), // Good to know when they joined
       });
 
       // 4. Role is saved! Send them to the Home Screen.
@@ -52,7 +53,6 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
       }
     } catch (e) {
       // If something goes wrong, stop loading and show an error
-      print('Error selecting role: $e');
       setState(() {
         _isLoading = false;
       });
@@ -103,16 +103,15 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
 
               // If loading, show a circle. Otherwise, show the buttons.
               if (_isLoading)
-                const Center(
-                  child: CircularProgressIndicator(),
-                )
+                const Center(child: CircularProgressIndicator())
               else ...[
                 // --- Caretaker Button ---
                 _buildRoleButton(
                   context: context,
                   icon: Icons.admin_panel_settings,
                   title: 'ฉันเป็นผู้ดูแล', // "I am a Caretaker"
-                  subtitle: 'สำหรับสร้างและจัดการกลุ่มและงานต่างๆ', // "For creating and managing groups and tasks"
+                  subtitle:
+                      'สำหรับสร้างและจัดการกลุ่มและงานต่างๆ', // "For creating and managing groups and tasks"
                   color: const Color(0xFF2E88F3), // Your action blue
                   onTap: () => _selectRole('caretaker'),
                 ),
@@ -123,7 +122,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   context: context,
                   icon: Icons.person,
                   title: 'ฉันเป็นผู้รับการดูแล', // "I am a Care Receiver"
-                  subtitle: 'สำหรับดูและทำเครื่องหมายงานที่ได้รับ', // "For viewing and checking off assigned tasks"
+                  subtitle:
+                      'สำหรับดูและทำเครื่องหมายงานที่ได้รับ', // "For viewing and checking off assigned tasks"
                   color: const Color(0xFF7ED6A8), // Your action green
                   onTap: () => _selectRole('carereceiver'),
                 ),
@@ -154,7 +154,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
           border: Border.all(color: color, width: 2),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),

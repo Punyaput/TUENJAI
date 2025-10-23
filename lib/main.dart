@@ -8,7 +8,6 @@ import 'package:intl/date_symbol_data_local.dart';
 // Import your screens
 import 'screens/initial_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/login_screen.dart'; // Needed for logged-out state
 
 // Use this if you have firebase_options.dart from flutterfire configure
 // import 'firebase_options.dart';
@@ -86,15 +85,9 @@ class AuthWrapper extends StatelessWidget {
         // 2. Check if user data exists in the snapshot
         if (snapshot.hasData && snapshot.data != null) {
           // User is logged IN - Go to HomeScreen
-          print(
-            "AuthWrapper: User is logged in (${snapshot.data!.uid}). Navigating to HomeScreen.",
-          ); // Debug log
           return const HomeScreen();
         } else {
           // User is logged OUT - Go to InitialScreen (which leads to LoginScreen)
-          print(
-            "AuthWrapper: User is logged out. Navigating to InitialScreen.",
-          ); // Debug log
           return const InitialScreen();
         }
       },

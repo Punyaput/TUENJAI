@@ -57,7 +57,6 @@ class _GroupsScreenState extends State<GroupsScreen> {
         _logout();
       }
     } catch (e) {
-      print('Error fetching user data: $e');
       setState(() {
         _isLoading = false;
       });
@@ -165,7 +164,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: const Color(0xFF2E88F3).withOpacity(0.1),
+              color: const Color(0xFF2E88F3).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(30),
             ),
             child: Icon(icon, size: 30, color: const Color(0xFF2E88F3)),
@@ -246,7 +245,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -295,7 +294,6 @@ class _GroupsScreenState extends State<GroupsScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          print("Firestore Error: ${snapshot.error}");
           return Center(child: Text('เกิดข้อผิดพลาด: ${snapshot.error}'));
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -329,7 +327,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -388,9 +386,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                                       );
                                     },
                                 errorBuilder: (context, error, stackTrace) {
-                                  print(
-                                    "Error loading group image: $error",
-                                  ); // Log error
+                                  // Log error
                                   return _buildFallbackGroupIcon(); // Show placeholder on error
                                 },
                               )
@@ -467,13 +463,15 @@ class _GroupsScreenState extends State<GroupsScreen> {
   Widget _buildFallbackGroupIcon() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF7ED6A8).withOpacity(0.2), // Use a theme color
+        color: const Color(
+          0xFF7ED6A8,
+        ).withValues(alpha: 0.2), // Use a theme color
         // borderRadius: BorderRadius.circular(12), // Already handled by ClipRRect
       ),
       child: Icon(
         Icons.group_outlined, // Use outlined icon
         size: 30,
-        color: const Color(0xFF7ED6A8).withOpacity(0.8),
+        color: const Color(0xFF7ED6A8).withValues(alpha: 0.8),
       ),
     );
   }
@@ -489,13 +487,13 @@ class _GroupsScreenState extends State<GroupsScreen> {
             width: screenWidth * 0.3,
             height: screenWidth * 0.3,
             decoration: BoxDecoration(
-              color: const Color(0xFF2E88F3).withOpacity(0.1),
+              color: const Color(0xFF2E88F3).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(screenWidth * 0.15),
             ),
             child: Icon(
               Icons.group,
               size: screenWidth * 0.15,
-              color: const Color(0xFF2E88F3).withOpacity(0.5),
+              color: const Color(0xFF2E88F3).withValues(alpha: 0.5),
             ),
           ),
           SizedBox(height: screenHeight * 0.03),
@@ -540,7 +538,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -585,7 +583,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),

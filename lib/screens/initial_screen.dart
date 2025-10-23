@@ -100,7 +100,6 @@ class InitialScreen extends StatelessWidget {
                   child: CustomButton(
                     text: 'เริ่มต้นใช้งาน',
                     onPressed: () {
-                      print('Start button pressed');
                       Navigator.push(
                         context,
                         MaterialPageRoute(

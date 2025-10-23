@@ -22,7 +22,7 @@ class CustomButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -40,7 +40,9 @@ class CustomButton extends StatelessWidget {
                 fontFamily: 'NotoLoopedThaiUI',
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: isEnabled ? const Color(0xFFF3F3F3) : const Color(0xFF9CA3AF),
+                color: isEnabled
+                    ? const Color(0xFFF3F3F3)
+                    : const Color(0xFF9CA3AF),
                 height: 1.41,
               ),
               textAlign: TextAlign.center,

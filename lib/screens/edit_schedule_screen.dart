@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 // Removed Firestore/Auth imports
-import 'package:intl/intl.dart'; // Still needed for formatting time in dialog
 
 class EditScheduleScreen extends StatefulWidget {
   final Map<String, List<Map<String, String>>> initialSchedule;
@@ -266,7 +265,7 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
                       onPressed: () => _removeTask(dayIndex, taskIndex),
                     ),
                   );
-                }).toList(),
+                }),
 
               // "Add Task" button at the bottom of each day's section
               Align(

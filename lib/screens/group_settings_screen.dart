@@ -1,14 +1,14 @@
 // lib/screens/group_settings_screen.dart
 
-import 'dart:io';
+import 'dart:io'; // For File
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart'; // For image upload
+import 'package:image_picker/image_picker.dart'; // For image picking
 import 'package:qr_flutter/qr_flutter.dart';
 import '../widgets/background_circles.dart';
-// import '../widgets/custom_button.dart';
+// import '../widgets/custom_button.dart'; // Keep for future "Leave Group"
 
 class GroupSettingsScreen extends StatefulWidget {
   final String groupId;
@@ -94,8 +94,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       _isCurrentUserGroupCaretaker = false;
 
       final allIdsToFetch = {...memberIds, ...pendingIds}.toList();
-      // --- Fetch user data for all members/pending, including potential ghosts ---
-      // (Ghosts won't be in the result, which is fine)
       await _fetchUsernames(allIdsToFetch);
 
       final List<Map<String, dynamic>> fetchedMembersData = [];
@@ -103,11 +101,10 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
 
       // Process members
       for (String memberId in memberIds) {
-        final memberData = _userCache[memberId]; // Get from cache
+        final memberData = _userCache[memberId];
         final memberRole = memberData?['role'] ?? 'unknown';
         fetchedMembersData.add({
           'uid': memberId,
-          // If memberData is null (ghost user), show a fallback
           'username':
               memberData?['username'] ?? 'ผู้ใช้ที่ถูกลบ', // "Deleted User"
           'role': memberRole,
@@ -121,9 +118,8 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       // Process pending requests
       for (String memberId in pendingIds) {
         final memberData = _userCache[memberId];
-        // If a pending user deleted their account, they just won't show up here
-        // which is fine. Or show fallback:
         if (memberData != null) {
+          // Only show pending users that exist
           fetchedPendingData.add({
             'uid': memberId,
             'username': memberData['username'] ?? 'กำลังโหลด...',
@@ -143,14 +139,14 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         });
       }
     } catch (e) {
-      print("Error fetching group/user data: $e");
       if (mounted) {
         setState(() {
           _isLoadingGroupData = false;
         });
         _handleError("Error fetching group data", e);
-        if (e.toString().contains("Group not found") && mounted)
+        if (e.toString().contains("Group not found") && mounted) {
           Navigator.pop(context);
+        }
       }
     }
   }
@@ -179,13 +175,12 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         }
       }
     } catch (e) {
-      print("Error batch fetching usernames: $e");
+      // Ignore individual fetch errors
     }
   }
 
   // --- Image Handling ---
   Future<void> _pickGroupImage(ImageSource source) async {
-    /* ... (unchanged) ... */
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
@@ -204,7 +199,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   }
 
   void _showImagePickerOptions() {
-    /* ... (unchanged) ... */
     if (!_isCurrentUserGroupCaretaker) return;
     showModalBottomSheet(
       context: context,
@@ -269,7 +263,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     required String label,
     required VoidCallback onTap,
   }) {
-    /* ... (unchanged) ... */
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -278,7 +271,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: const Color(0xFF2E88F3).withOpacity(0.1),
+              color: const Color(0xFF2E88F3).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(30),
             ),
             child: Icon(icon, size: 30, color: const Color(0xFF2E88F3)),
@@ -298,7 +291,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   }
 
   Future<void> _uploadGroupImage() async {
-    /* ... (unchanged) ... */
     if (_imageFile == null) return;
     setState(() {
       _isUploadingImage = true;
@@ -334,16 +326,16 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       }
     } catch (e) {
       _handleError("Error uploading group image", e);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isUploadingImage = false;
         });
+      }
     }
   }
 
   // --- Edit Name/Description ---
   void _showEditDialog(String field, String initialValue) {
-    /* ... (unchanged) ... */
     if (!_isCurrentUserGroupCaretaker) return;
     final TextEditingController controller = TextEditingController(
       text: initialValue,
@@ -393,7 +385,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   }
 
   Future<void> _updateGroupField(String field, String value) async {
-    /* ... (unchanged) ... */
     try {
       await FirebaseFirestore.instance
           .collection('groups')
@@ -414,19 +405,58 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   }
 
   // --- Delete Group ---
+  // --- UPDATED: Delete Group function with member cleanup ---
   Future<void> _deleteGroup() async {
-    /* ... (unchanged) ... */
     setState(() {
       _isDeletingGroup = true;
     });
+
+    final db = FirebaseFirestore.instance;
+    final groupRef = db.collection('groups').doc(widget.groupId);
+
     try {
-      await FirebaseFirestore.instance
-          .collection('groups')
-          .doc(widget.groupId)
-          .delete();
+      // 1. Get the group doc to find all members
+      final groupDoc = await groupRef.get();
+      if (!groupDoc.exists) throw Exception("Group already deleted.");
+
+      final List<dynamic> memberIds = groupDoc.data()?['members'] ?? [];
+      final List<dynamic> pendingIds =
+          groupDoc.data()?['pendingRequests'] ?? [];
+      final allAssociatedIds = {...memberIds, ...pendingIds}.toList();
+
+      // 2. Create a batch write
+      final batch = db.batch();
+
+      // 3. For each member, remove the group from their 'joinedGroups' list
+      // This includes pending users, just in case (though they shouldn't have it)
+      for (String userId in allAssociatedIds.cast<String>()) {
+        final userRef = db.collection('users').doc(userId);
+        // We only update if the user exists, but removing from an array
+        // is safe even if the doc doesn't exist (it just does nothing)
+        // However, to be perfectly safe, we'll only update if the user
+        // was in the main members list.
+        if (memberIds.contains(userId)) {
+          batch.update(userRef, {
+            'joinedGroups': FieldValue.arrayRemove([widget.groupId]),
+          });
+        }
+      }
+
+      // 4. Delete the group document itself
+      batch.delete(groupRef);
+
+      // 5. Commit the atomic batch
+      await batch.commit();
+
+      // TODO (Advanced): This does NOT delete the 'tasks' subcollection.
+      // That requires a Cloud Function or manually querying and deleting all tasks
+      // *before* this function runs.
+
       if (mounted) {
         int count = 0;
-        Navigator.of(context).popUntil((_) => count++ >= 2);
+        Navigator.of(
+          context,
+        ).popUntil((_) => count++ >= 2); // Go back 2 screens
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('ลบกลุ่มเรียบร้อยแล้ว'),
@@ -436,15 +466,16 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       }
     } catch (e) {
       _handleError("Error deleting group", e);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isDeletingGroup = false;
         });
+      }
     }
   }
+  // --- END UPDATED DELETE ---
 
   void _showDeleteGroupDialog() {
-    /* ... (unchanged) ... */
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -461,7 +492,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
             ),
           ),
           content: const Text(
-            'คุณแน่ใจหรือไม่ว่าต้องการลบกลุ่มนี้อย่างถาวร? ข้อมูลกลุ่มจะถูกลบ (แต่งานต่างๆ จะยังคงอยู่)',
+            'คุณแน่ใจหรือไม่ว่าต้องการลบกลุ่มนี้อย่างถาวร? ข้อมูลกลุ่มจะถูกลบ และสมาชิกทั้งหมดจะถูกนำออก',
             style: TextStyle(fontFamily: 'NotoLoopedThaiUI'),
           ),
           actions: [
@@ -499,7 +530,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
 
   // --- Remove Member Logic ---
   void _showRemoveMemberDialog(String memberId, String username) {
-    /* ... (unchanged) ... */
     if (!_isCurrentUserGroupCaretaker || memberId == _currentUserId) return;
     showDialog(
       context: context,
@@ -538,24 +568,24 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     );
   }
 
-  // --- UPDATED: Remove Member Logic ---
+  // --- UPDATED: Remove Member Logic (Resilient to "Ghosts") ---
   Future<void> _removeMember(String memberId) async {
     if (!_isCurrentUserGroupCaretaker) return;
     setState(() {
       _isLoadingGroupData = true;
-    }); // Show loading
+    });
     try {
       final db = FirebaseFirestore.instance;
-
-      // 1. Check if the user document exists
       final userRef = db.collection('users').doc(memberId);
-      final userDoc = await userRef.get();
-
-      // 2. Prepare batch write
-      final batch = db.batch();
       final groupRef = db.collection('groups').doc(widget.groupId);
 
-      // 3. ALWAYS remove member from the group's 'members' list
+      // 1. Check if the user document exists *first*
+      final userDoc = await userRef.get();
+
+      // 2. Create a batch
+      final batch = db.batch();
+
+      // 3. ALWAYS remove memberId from the group's 'members' array
       batch.update(groupRef, {
         'members': FieldValue.arrayRemove([memberId]),
       });
@@ -565,27 +595,25 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         batch.update(userRef, {
           'joinedGroups': FieldValue.arrayRemove([widget.groupId]),
         });
-      } else {
-        print("User $memberId document not found. Skipping user update.");
-      }
+      } else {}
 
       // 5. Commit the batch
       await batch.commit();
 
-      _fetchGroupAndUserData(); // Refresh list (this will stop loading state)
+      _fetchGroupAndUserData(); // Refresh list
     } catch (e) {
       _handleError("Error removing member", e);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isLoadingGroupData = false;
         });
+      }
     }
   }
   // --- END UPDATED LOGIC ---
 
   // --- Accept/Deny Logic ---
   Future<void> _acceptMember(String memberId) async {
-    /* ... (unchanged) ... */
     if (!_isCurrentUserGroupCaretaker) return;
     setState(() {
       _isLoadingGroupData = true;
@@ -606,15 +634,15 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       _fetchGroupAndUserData();
     } catch (e) {
       _handleError("Error accepting member", e);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isLoadingGroupData = false;
         });
+      }
     }
   }
 
   Future<void> _denyMember(String memberId) async {
-    /* ... (unchanged) ... */
     if (!_isCurrentUserGroupCaretaker) return;
     setState(() {
       _isLoadingGroupData = true;
@@ -629,16 +657,15 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       _fetchGroupAndUserData();
     } catch (e) {
       _handleError("Error denying member", e);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isLoadingGroupData = false;
         });
+      }
     }
   }
 
   void _handleError(String contextMessage, dynamic error) {
-    /* ... (unchanged) ... */
-    print("$contextMessage: $error");
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -654,7 +681,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (Build method remains unchanged, including centered QR code and fancy member list) ...
     final screenWidth = MediaQuery.of(context).size.width;
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -855,7 +881,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     Color? valueColor,
     VoidCallback? onEdit,
   }) {
-    /* ... (unchanged) ... */
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       decoration: BoxDecoration(
@@ -863,7 +888,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 1),
           ),
@@ -908,7 +933,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   }
 
   Widget _buildInviteCodeSection(double screenWidth) {
-    /* ... (unchanged) ... */
     if (_inviteCode == null) return const SizedBox.shrink();
     return Container(
       width: screenWidth * 0.8,
@@ -918,7 +942,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -1028,7 +1052,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: Icon(Icons.close, color: Colors.red.shade400),
+                      icon: Icon(Icons.close, color: Colors.red),
                       tooltip: 'ปฏิเสธ',
                       onPressed: () => _denyMember(member['uid']),
                     ),
@@ -1056,7 +1080,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 1),
           ),
@@ -1133,7 +1157,19 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
                           member['username'],
                         ),
                       )
-                    : null,
+                    : (isSelf
+                          ? const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Text(
+                                "นี่คือคุณ",
+                                style: TextStyle(
+                                  fontFamily: 'NotoLoopedThaiUI',
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            )
+                          : null), // Show "This is you"
               );
             },
           ),
@@ -1156,7 +1192,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       margin: const EdgeInsets.only(top: 4),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(

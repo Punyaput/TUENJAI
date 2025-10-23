@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import '../widgets/background_circles.dart';
 import '../widgets/custom_bottom_navigation.dart';
-import '../widgets/custom_button.dart';
 import './groups_screen.dart';
 import './settings_screen.dart';
 import './login_screen.dart';
@@ -77,7 +76,6 @@ class _HomeScreenState extends State<HomeScreen> {
         _logout();
       }
     } catch (e) {
-      print('Error fetching user data: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -86,32 +84,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<String> _getUsername(String userId) async {
-    if (_userNameCache.containsKey(userId)) return _userNameCache[userId]!;
-    try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .get();
-      if (userDoc.exists) {
-        final name = userDoc.data()?['username'] ?? 'ไม่ทราบชื่อ';
-        _userNameCache[userId] = name;
-        return name;
-      }
-    } catch (e) {
-      print("Error getting username for $userId: $e");
-    }
-    return 'ไม่ทราบชื่อ';
-  }
-
   Future<Map<String, String>> _getUsernames(List<String> userIds) async {
     Map<String, String> names = {};
     List<String> idsToFetch = [];
     for (String id in userIds.toSet()) {
-      if (!_userNameCache.containsKey(id) && id.isNotEmpty)
+      if (!_userNameCache.containsKey(id) && id.isNotEmpty) {
         idsToFetch.add(id);
-      else if (_userNameCache.containsKey(id))
+      } else if (_userNameCache.containsKey(id)) {
         names[id] = _userNameCache[id]!;
+      }
     }
     if (idsToFetch.isNotEmpty) {
       try {
@@ -132,32 +113,13 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         }
       } catch (e) {
-        print("Error getting usernames: $e");
+        // Ignore individual fetch errors
       }
     }
     for (String id in userIds) {
       names.putIfAbsent(id, () => _userNameCache[id] ?? 'ไม่ทราบชื่อ');
     }
     return names;
-  }
-
-  Future<String> _getGroupName(String groupId) async {
-    if (_groupNameCache.containsKey(groupId)) return _groupNameCache[groupId]!;
-    try {
-      final groupDoc = await FirebaseFirestore.instance
-          .collection('groups')
-          .doc(groupId)
-          .get();
-      if (groupDoc.exists) {
-        final name = groupDoc.data()?['groupName'] ?? 'กลุ่มไม่มีชื่อ';
-        _groupNameCache[groupId] = name;
-        return name;
-      }
-    } catch (e) {
-      print("Error getting group name for $groupId: $e");
-    }
-    _groupNameCache[groupId] = 'กลุ่มไม่มีชื่อ';
-    return 'กลุ่มไม่มีชื่อ';
   }
 
   Future<void> _getGroupNames(List<String> groupIds) async {
@@ -185,7 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         }
       } catch (e) {
-        print("Error getting group names: $e");
+        // Ignore individual fetch errors
       }
     }
     for (String id in groupIds) {
@@ -356,8 +318,9 @@ class _HomeScreenState extends State<HomeScreen> {
   // --- REFINED: Content for Caretakers (Grouped Dashboard) ---
   Widget _buildCaretakerContent(double screenWidth) {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null)
+    if (user == null) {
       return const Expanded(child: Center(child: Text('ไม่พบผู้ใช้งาน')));
+    }
 
     return Expanded(
       child: FutureBuilder<DocumentSnapshot>(
@@ -366,10 +329,12 @@ class _HomeScreenState extends State<HomeScreen> {
             .doc(user.uid)
             .get(),
         builder: (context, userSnapshot) {
-          if (userSnapshot.connectionState == ConnectionState.waiting)
+          if (userSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          if (!userSnapshot.hasData || !userSnapshot.data!.exists)
+          }
+          if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
             return const Center(child: Text('ไม่พบข้อมูลผู้ใช้'));
+          }
 
           final userData = userSnapshot.data!.data() as Map<String, dynamic>;
           final List<String> joinedGroups =
@@ -384,12 +349,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 .where('groupId', whereIn: joinedGroups)
                 .snapshots(),
             builder: (context, taskSnapshot) {
-              if (taskSnapshot.connectionState == ConnectionState.waiting)
+              if (taskSnapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
-              if (taskSnapshot.hasError)
+              }
+              if (taskSnapshot.hasError) {
                 return const Center(child: Text('เกิดข้อผิดพลาดในการโหลดงาน'));
-              if (!taskSnapshot.hasData || taskSnapshot.data!.docs.isEmpty)
+              }
+              if (!taskSnapshot.hasData || taskSnapshot.data!.docs.isEmpty) {
                 return _buildEmptyTaskList(screenWidth);
+              }
 
               final allTasks = taskSnapshot.data!.docs;
               final now = DateTime.now();
@@ -571,8 +539,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     categories['upcoming']!.isNotEmpty;
               }).toList();
 
-              if (relevantGroupIds.isEmpty)
+              if (relevantGroupIds.isEmpty) {
                 return _buildEmptyTaskList(screenWidth);
+              }
 
               // --- Build Grouped ListView ---
               return ListView.builder(
@@ -615,12 +584,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           Colors.orange,
                           screenWidth,
                         ),
-                        ...pendingToday
-                            .map(
-                              (item) =>
-                                  _buildDashboardItemCard(item, screenWidth),
-                            )
-                            .toList(),
+                        ...pendingToday.map(
+                          (item) => _buildDashboardItemCard(item, screenWidth),
+                        ),
                       ],
                       if (completedToday.isNotEmpty) ...[
                         _buildSectionHeader(
@@ -629,15 +595,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           _completedColor,
                           screenWidth,
                         ),
-                        ...completedToday
-                            .map(
-                              (item) => _buildDashboardItemCard(
-                                item,
-                                screenWidth,
-                                isCompleted: true,
-                              ),
-                            )
-                            .toList(),
+                        ...completedToday.map(
+                          (item) => _buildDashboardItemCard(
+                            item,
+                            screenWidth,
+                            isCompleted: true,
+                          ),
+                        ),
                       ],
                       if (habits.isNotEmpty) ...[
                         _buildSectionHeader(
@@ -646,14 +610,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           _habitColor,
                           screenWidth,
                         ),
-                        ...habits
-                            .map(
-                              (item) => _buildHabitScheduleSummaryCard(
-                                item['data'],
-                                screenWidth,
-                              ),
-                            )
-                            .toList(),
+                        ...habits.map(
+                          (item) => _buildHabitScheduleSummaryCard(
+                            item['data'],
+                            screenWidth,
+                          ),
+                        ),
                       ],
                       if (upcoming.isNotEmpty) ...[
                         _buildSectionHeader(
@@ -662,19 +624,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           Colors.grey,
                           screenWidth,
                         ),
-                        ...upcoming
-                            .map(
-                              (item) => item['type'] == 'countdown'
-                                  ? _buildCountdownCard(
-                                      item['data'],
-                                      screenWidth,
-                                    )
-                                  : _buildAppointmentCardReadOnly(
-                                      item['data'],
-                                      screenWidth,
-                                    ),
-                            )
-                            .toList(),
+                        ...upcoming.map(
+                          (item) => item['type'] == 'countdown'
+                              ? _buildCountdownCard(item['data'], screenWidth)
+                              : _buildAppointmentCardReadOnly(
+                                  item['data'],
+                                  screenWidth,
+                                ),
+                        ),
                       ],
 
                       // Add a small divider between groups if desired
@@ -694,8 +651,9 @@ class _HomeScreenState extends State<HomeScreen> {
   // --- UPDATED: Content for Care Receivers (Grouped & Categorized) ---
   Widget _buildCareReceiverContent(double screenWidth) {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null)
+    if (user == null) {
       return const Expanded(child: Center(child: Text('ไม่พบผู้ใช้งาน')));
+    }
     final todayWeekday = DateTime.now().weekday;
     final todayDateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
@@ -706,10 +664,12 @@ class _HomeScreenState extends State<HomeScreen> {
             .doc(user.uid)
             .get(),
         builder: (context, userSnapshot) {
-          if (userSnapshot.connectionState == ConnectionState.waiting)
+          if (userSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          if (!userSnapshot.hasData || !userSnapshot.data!.exists)
+          }
+          if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
             return const Center(child: Text('ไม่พบข้อมูลผู้ใช้'));
+          }
 
           final userData = userSnapshot.data!.data() as Map<String, dynamic>;
           final List<String> joinedGroups =
@@ -724,14 +684,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 .where('groupId', whereIn: joinedGroups)
                 .snapshots(),
             builder: (context, taskSnapshot) {
-              if (taskSnapshot.connectionState == ConnectionState.waiting)
+              if (taskSnapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
-              if (taskSnapshot.hasError)
+              }
+              if (taskSnapshot.hasError) {
                 return const Center(child: Text('เกิดข้อผิดพลาดในการโหลดงาน'));
+              }
               if (!taskSnapshot.hasData ||
                   taskSnapshot.data == null ||
-                  taskSnapshot.data!.docs.isEmpty)
+                  taskSnapshot.data!.docs.isEmpty) {
                 return _buildEmptyTaskList(screenWidth);
+              }
 
               final allTasks = taskSnapshot.data!.docs;
               // --- Process, Group, and Filter Tasks for CareReceiver ---
@@ -860,8 +823,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     categories['upcoming_countdowns']!.isNotEmpty;
               }).toList();
 
-              if (relevantGroupIds.isEmpty)
+              if (relevantGroupIds.isEmpty) {
                 return _buildEmptyTaskList(screenWidth);
+              }
 
               // --- Build Grouped ListView for CareReceiver ---
               return ListView.builder(
@@ -903,11 +867,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           _habitColor,
                           screenWidth,
                         ),
-                        ...pendingHabits
-                            .map(
-                              (item) => _buildHabitItemCard(item, screenWidth),
-                            )
-                            .toList(),
+                        ...pendingHabits.map(
+                          (item) => _buildHabitItemCard(item, screenWidth),
+                        ),
                       ],
                       if (pendingAppointments.isNotEmpty) ...[
                         _buildSectionHeader(
@@ -916,15 +878,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           _appointmentColor,
                           screenWidth,
                         ),
-                        ...pendingAppointments
-                            .map(
-                              (item) => _buildAppointmentCard(
-                                item['data'],
-                                item['id'],
-                                screenWidth,
-                              ),
-                            )
-                            .toList(),
+                        ...pendingAppointments.map(
+                          (item) => _buildAppointmentCard(
+                            item['data'],
+                            item['id'],
+                            screenWidth,
+                          ),
+                        ),
                       ],
                       if (upcomingCountdowns.isNotEmpty) ...[
                         _buildSectionHeader(
@@ -933,14 +893,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           _countdownColor,
                           screenWidth,
                         ),
-                        ...upcomingCountdowns
-                            .map(
-                              (item) => _buildCountdownCard(
-                                item['data'],
-                                screenWidth,
-                              ),
-                            )
-                            .toList(),
+                        ...upcomingCountdowns.map(
+                          (item) =>
+                              _buildCountdownCard(item['data'], screenWidth),
+                        ),
                       ],
                       // Add a small divider between groups if desired
                       if (index < relevantGroupIds.length - 1)
@@ -980,10 +936,10 @@ class _HomeScreenState extends State<HomeScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _appointmentColor.withOpacity(0.3)),
+        border: Border.all(color: _appointmentColor.withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1060,10 +1016,10 @@ class _HomeScreenState extends State<HomeScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _appointmentColor.withOpacity(0.3)),
+        border: Border.all(color: _appointmentColor.withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1149,7 +1105,7 @@ class _HomeScreenState extends State<HomeScreen> {
         border: Border.all(color: _countdownColor, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1199,10 +1155,10 @@ class _HomeScreenState extends State<HomeScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _habitColor.withOpacity(0.4)),
+        border: Border.all(color: _habitColor.withValues(alpha: 0.4)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 5,
             offset: const Offset(0, 1),
           ),
@@ -1219,7 +1175,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               if (habitDocId.isNotEmpty &&
                   groupId.isNotEmpty &&
-                  subTaskKey.isNotEmpty)
+                  subTaskKey.isNotEmpty) {
                 _showCompleteHabitItemDialog(
                   context,
                   habitDocId,
@@ -1228,6 +1184,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   title,
                   time,
                 );
+              }
             },
           ),
           const SizedBox(width: 8),
@@ -1265,8 +1222,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final assigned = (task['assignedTo'] as List?)?.cast<String>() ?? [];
     List<String> days = [];
     for (int i = 1; i <= 7; i++) {
-      if ((schedule[i.toString()] as List?)?.isNotEmpty ?? false)
+      if ((schedule[i.toString()] as List?)?.isNotEmpty ?? false) {
         days.add(_dayLabelsShort[i - 1]);
+      }
     }
     final repeat = days.isNotEmpty ? 'ทำซ้ำ ${days.join(", ")}' : '-';
     return FutureBuilder<Map<String, String>>(
@@ -1278,20 +1236,25 @@ class _HomeScreenState extends State<HomeScreen> {
             snapshot.data != null &&
             snapshot.data!.values.isNotEmpty) {
           assignSum = 'มอบหมายให้: ${snapshot.data!.values.join(', ')}';
-          if (assignSum.length > 40)
+          if (assignSum.length > 40) {
             assignSum = 'มอบหมายให้ ${assigned.length} คน';
-        } else if (assigned.isEmpty)
+          }
+        } else if (assigned.isEmpty) {
           assignSum = 'ไม่ได้มอบหมาย';
+        }
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _habitColor.withOpacity(0.4), width: 2),
+            border: Border.all(
+              color: _habitColor.withValues(alpha: 0.4),
+              width: 2,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -1354,7 +1317,11 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.only(top: 16.0, bottom: 8.0, left: 4.0),
       child: Row(
         children: [
-          Icon(icon, color: color.withOpacity(0.8), size: screenWidth * 0.05),
+          Icon(
+            icon,
+            color: color.withValues(alpha: 0.8),
+            size: screenWidth * 0.05,
+          ),
           const SizedBox(width: 8),
           Text(
             title,
@@ -1366,7 +1333,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(width: 4),
-          Expanded(child: Divider(color: color.withOpacity(0.3), thickness: 1)),
+          Expanded(
+            child: Divider(color: color.withValues(alpha: 0.3), thickness: 1),
+          ),
         ],
       ),
     );
@@ -1429,16 +1398,16 @@ class _HomeScreenState extends State<HomeScreen> {
       ), // Adjust padding
       decoration: BoxDecoration(
         color: isCompleted
-            ? Colors.white.withOpacity(0.8)
+            ? Colors.white.withValues(alpha: 0.8)
             : Colors.white, // Slightly faded if completed
         borderRadius: BorderRadius.circular(8), // Smaller radius
         border: Border.all(
-          color: itemColor.withOpacity(isCompleted ? 0.5 : 0.8),
+          color: itemColor.withValues(alpha: isCompleted ? 0.5 : 0.8),
         ), // Border matching color
         boxShadow: [
           BoxShadow(
             // Subtle shadow
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -1548,8 +1517,9 @@ class _HomeScreenState extends State<HomeScreen> {
     /* ... unchanged ... */
     Timestamp? completedA = a['data']?['completedAt'];
     Timestamp? completedB = b['data']?['completedAt'];
-    if (completedA != null && completedB != null)
+    if (completedA != null && completedB != null) {
       return completedB.compareTo(completedA);
+    }
     if (completedA != null) return -1;
     if (completedB != null) return 1;
     return _sortPendingItems(a, b);
@@ -1646,7 +1616,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     } catch (e) {
-      print("Error completing habit item: $e");
       if (!mounted) return;
       _showError("เกิดข้อผิดพลาดในการบันทึก: $e");
     }
@@ -1738,7 +1707,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     } catch (e) {
-      print("Error completing task: $e");
       if (mounted) {
         _showError("เกิดข้อผิดพลาด: $e");
       }
@@ -1831,49 +1799,6 @@ class _HomeScreenState extends State<HomeScreen> {
             textAlign: TextAlign.center,
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildBottomAppBarItem({
-    required int index,
-    required IconData icon,
-    required String label,
-    required double screenWidth,
-  }) {
-    final isSelected = (_selectedIndex == index);
-    final Color activeColor = const Color(0xFF2E88F3);
-    final Color inactiveColor = const Color(0xFF9CA3AF);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _onItemTapped(index),
-        borderRadius: BorderRadius.circular(20), // Rounded tap area
-        child: Container(
-          // Make the tap area bigger
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 24,
-                color: isSelected ? activeColor : inactiveColor,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'NotoLoopedThaiUI',
-                  fontSize: screenWidth * 0.03,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: isSelected ? activeColor : inactiveColor,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

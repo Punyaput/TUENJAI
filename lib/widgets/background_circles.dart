@@ -19,11 +19,11 @@ class TopBackgroundCircles extends StatelessWidget {
               height: 200,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF8ACE95).withOpacity(0.5),
+                color: const Color(0xFF8ACE95).withValues(alpha: 0.5),
               ),
             ),
           ),
-          
+
           // Second circle
           Positioned(
             top: 0,
@@ -33,7 +33,7 @@ class TopBackgroundCircles extends StatelessWidget {
               height: 200,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF8ACE95).withOpacity(0.5),
+                color: const Color(0xFF8ACE95).withValues(alpha: 0.5),
               ),
             ),
           ),
@@ -62,11 +62,11 @@ class BottomBackgroundCircles extends StatelessWidget {
               height: 339,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFFA3CDFF).withOpacity(0.7),
+                color: const Color(0xFFA3CDFF).withValues(alpha: 0.7),
               ),
             ),
           ),
-          
+
           // Medium blue circle 1
           Positioned(
             top: 108,
@@ -76,11 +76,11 @@ class BottomBackgroundCircles extends StatelessWidget {
               height: 246,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF78B6FF).withOpacity(0.9),
+                color: const Color(0xFF78B6FF).withValues(alpha: 0.9),
               ),
             ),
           ),
-          
+
           // Medium blue circle 2
           Positioned(
             top: 69,
@@ -90,7 +90,7 @@ class BottomBackgroundCircles extends StatelessWidget {
               height: 246,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF78B6FF).withOpacity(0.9),
+                color: const Color(0xFF78B6FF).withValues(alpha: 0.9),
               ),
             ),
           ),

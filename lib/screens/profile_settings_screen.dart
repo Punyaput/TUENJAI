@@ -2,7 +2,6 @@
 
 import 'dart:io'; // Import for File
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -43,10 +42,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       // Handle not logged in state if needed, maybe pop screen
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isLoading = false;
         });
+      }
       _showError("ไม่พบผู้ใช้งาน");
       Navigator.pop(context); // Go back if no user
       return;
@@ -66,14 +66,14 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           _isLoading = false;
         });
       } else {
-        if (mounted)
+        if (mounted) {
           setState(() {
             _isLoading = false;
           });
+        }
         _showError("ไม่พบข้อมูลโปรไฟล์");
       }
     } catch (e) {
-      print("Error loading user data: $e");
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -102,7 +102,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         });
       }
     } catch (e) {
-      print("Error picking image: $e");
       _showError("เกิดข้อผิดพลาดในการเลือกรูปภาพ: $e");
     }
   }
@@ -180,7 +179,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: const Color(0xFF2E88F3).withOpacity(0.1),
+              color: const Color(0xFF2E88F3).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(30),
             ),
             child: Icon(icon, size: 30, color: const Color(0xFF2E88F3)),
@@ -201,58 +200,41 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
   // --- Upload Image function (same as setup) ---
   Future<String?> _uploadImageToStorage(XFile imageFile, String userId) async {
-    print('Starting image upload for user: $userId'); // Log start
+    // Log start
     try {
       final String fileName =
           'profile_pics/${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      print('  Generated fileName: $fileName'); // Log filename
+      // Log filename
 
       final Reference storageRef = FirebaseStorage.instance.ref().child(
         fileName,
       );
-      print(
-        '  Created storage reference: ${storageRef.fullPath}',
-      ); // Log full path
+      // Log full path
 
       final UploadTask uploadTask = storageRef.putFile(File(imageFile.path));
-      print(
-        '  Upload task created. Awaiting completion...',
-      ); // Log before await
+      // Log before await
 
       // Listen to task state changes for more detail (optional but helpful)
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        print(
-          '    Task state: ${snapshot.state} (${snapshot.bytesTransferred}/${snapshot.totalBytes})',
-        );
-      });
+      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {});
 
       final TaskSnapshot snapshot =
           await uploadTask; // Wait for upload to complete
-      print(
-        '  Upload task completed. State: ${snapshot.state}',
-      ); // Log completion state
+      // Log completion state
 
       if (snapshot.state == TaskState.success) {
-        print('  Attempting to get download URL...'); // Log before getting URL
+        // Log before getting URL
         final String downloadUrl = await snapshot.ref.getDownloadURL();
-        print("  Image uploaded successfully: $downloadUrl"); // Log success URL
+        // Log success URL
         return downloadUrl;
       } else {
-        print(
-          '  Upload task did not succeed. State: ${snapshot.state}',
-        ); // Log failure state
+        // Log failure state
         _showError("การอัปโหลดรูปภาพไม่สำเร็จ (State: ${snapshot.state})");
         return null;
       }
     } catch (e) {
-      print(
-        "!!! Error during image upload process: $e",
-      ); // Log the specific error caught
+      // Log the specific error caught
       // Check if it's a StorageException for more details
-      if (e is FirebaseException) {
-        print("FirebaseException Code: ${e.code}");
-        print("FirebaseException Message: ${e.message}");
-      }
+      if (e is FirebaseException) {}
       _showError("เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ: $e");
       return null; // Return null if upload fails
     }
@@ -282,7 +264,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           });
           return; // Stop saving if upload failed
         }
-        // TODO: Optionally delete the OLD image from Firebase Storage here
+        // TODO (Optional): Delete the OLD image from Firebase Storage here
         // Requires storing the old file path/ref, not just the URL
       }
       // --- End image upload ---
@@ -303,23 +285,21 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       // Update the user document
       await db.collection('users').doc(user.uid).update(updateData);
 
-      print('Profile updated for user: ${user.uid}');
-      if (profilePicUrl != null) print('Profile Pic URL: $profilePicUrl');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'บันทึกข้อมูลเรียบร้อยแล้ว',
-              style: TextStyle(fontFamily: 'NotoLoopedThaiUI'),
-            ),
-            backgroundColor: Color(0xFF7ED6A8),
-          ), // Green
-        );
-        Navigator.pop(context); // Go back to settings screen
+      if (profilePicUrl != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'บันทึกข้อมูลเรียบร้อยแล้ว',
+                style: TextStyle(fontFamily: 'NotoLoopedThaiUI'),
+              ),
+              backgroundColor: Color(0xFF7ED6A8),
+            ), // Green
+          );
+          Navigator.pop(context); // Go back to settings screen
+        }
       }
     } catch (e) {
-      print('Error saving profile: $e');
       if (mounted) {
         setState(() {
           _isSaving = false;
@@ -476,7 +456,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 10,
                             offset: const Offset(0, 2),
                           ),

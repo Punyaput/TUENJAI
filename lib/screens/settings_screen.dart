@@ -21,7 +21,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  int _selectedIndex = 2; // Settings tab is selected
+  final int _selectedIndex = 2; // Settings tab is selected
   bool _isDeleting = false; // Loading state for deletion
 
   void _onItemTapped(int index) {
@@ -83,7 +83,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     );
                   }
                 } catch (e) {
-                  print("Error logging out: $e");
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -205,13 +204,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       // 1. Delete Firestore Data FIRST
       await FirebaseFirestore.instance.collection('users').doc(userId).delete();
-      print("Firestore user document deleted for $userId");
-
-      // TODO (Advanced): Remove user from groups' member lists
 
       // 2. Delete Firebase Auth User
       await user.delete();
-      print("Firebase Auth user deleted for $userId");
 
       // 3. Navigate to Login Screen
       if (mounted) {
@@ -232,7 +227,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     } on FirebaseAuthException catch (e) {
-      print("Error deleting account: ${e.code} - ${e.message}");
       if (mounted) {
         Navigator.of(context).pop(); // Close confirmation dialog on error
         setState(() {
@@ -242,13 +236,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _showError(
             'การดำเนินการนี้ต้องมีการยืนยันตัวตนใหม่ กรุณาออกจากระบบและเข้าสู่ระบบอีกครั้งก่อนลองลบบัญชี',
           );
-          // TODO: Implement re-authentication flow for a better UX
+          // TODO (Optional): Implement re-authentication flow for a better UX
         } else {
           _showError('เกิดข้อผิดพลาดในการลบบัญชี: ${e.message}');
         }
       }
     } catch (e) {
-      print("Error deleting Firestore data or other error: $e");
       if (mounted) {
         Navigator.of(context).pop(); // Close confirmation dialog
         setState(() {
@@ -273,7 +266,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
-  // --- END NEW LOGIC ---
 
   @override
   Widget build(BuildContext context) {
@@ -435,7 +427,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final Color titleColor = isDestructive
         ? Colors.red.shade700
         : const Color(0xFF374151); // Darkest Red or Default Text
-    final Color iconBackgroundColor = iconColor.withOpacity(0.1);
+    final Color iconBackgroundColor = iconColor.withValues(alpha: 0.1);
 
     return Material(
       color: Colors.white,
@@ -449,7 +441,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),

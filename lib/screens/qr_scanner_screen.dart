@@ -44,7 +44,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   setState(() {
                     _isScanProcessing = true;
                   });
-                  print('QR Code found: $code');
                   // Send the code back to the previous screen
                   Navigator.pop(context, code);
                 }
@@ -59,7 +58,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
               height: 250,
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.7),
+                  color: Colors.white.withValues(alpha: 0.7),
                   width: 3,
                 ),
                 borderRadius: BorderRadius.circular(12),

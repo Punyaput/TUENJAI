@@ -39,7 +39,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
         }
       }
     } catch (e) {
-      print('Error scanning code: $e');
+      // Ignore scan errors
     }
   }
 
@@ -60,8 +60,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
 
       final db = FirebaseFirestore.instance;
       final enteredCode = _codeController.text
-          .trim()
-          .toUpperCase(); // Still uppercase for consistency? Or just trim() if using case-sensitive
+          .trim(); // No need to uppercase, codes are case-sensitive
 
       // 1. Find group with this code
       final querySnapshot = await db
@@ -110,7 +109,6 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      print("Error joining group: $e");
       setState(() {
         _isLoading = false;
       });
@@ -163,7 +161,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 10,
                             offset: const Offset(0, 2),
                           ),
@@ -211,7 +209,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 2),
                         ),
