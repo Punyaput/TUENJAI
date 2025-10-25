@@ -42,9 +42,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   late String _currentVerificationId;
   int? _resendToken;
 
-  // --- NEW: Timer variable ---
   Timer? _timer;
-  // ---
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -61,7 +59,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     });
   }
 
-  // --- ADDED: Cancel timer in dispose ---
+  // --- Cancel timer in dispose ---
   @override
   void dispose() {
     _timer?.cancel(); // <-- IMPORTANT: Cancel the timer
@@ -73,7 +71,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     }
     super.dispose();
   }
-  // ---
 
   void _listenForAutoFill() {
     _auth.verifyPhoneNumber(
@@ -99,7 +96,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     );
   }
 
-  // --- UPDATED: Uses Timer.periodic ---
+  // --- Uses Timer.periodic ---
   void _startResendTimer() {
     _timer?.cancel(); // Cancel any existing timer
     setState(() {
@@ -124,20 +121,16 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       }
     });
   }
-  // --- END UPDATED ---
 
   bool get _isOtpComplete {
-    /* ... unchanged ... */
     return _otpControllers.every((controller) => controller.text.isNotEmpty);
   }
 
   String get _otpCode {
-    /* ... unchanged ... */
     return _otpControllers.map((controller) => controller.text).join();
   }
 
   void _setOtpCode(String code) {
-    /* ... unchanged ... */
     if (code.length != 6) return;
     for (int i = 0; i < 6; i++) {
       if (mounted) {

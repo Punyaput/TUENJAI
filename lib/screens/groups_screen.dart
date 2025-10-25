@@ -353,7 +353,6 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 padding: const EdgeInsets.all(20),
                 child: Row(
                   children: [
-                    // --- UPDATED Group Image ---
                     SizedBox(
                       width: 60,
                       height: 60,
@@ -394,7 +393,6 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       ),
                     ),
 
-                    // --- END UPDATED ---
                     const SizedBox(width: 16),
                     // Group info (unchanged)
                     Expanded(
@@ -459,7 +457,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
-  // --- NEW Helper Widget for Fallback Icon ---
+  // --- Helper Widget for Fallback Icon ---
   Widget _buildFallbackGroupIcon() {
     return Container(
       decoration: BoxDecoration(

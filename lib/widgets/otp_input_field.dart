@@ -1,3 +1,5 @@
+// lib/widgets/otp_input_field.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -25,8 +27,8 @@ class OtpInputField extends StatelessWidget {
       height: fieldSize + 10,
       decoration: BoxDecoration(
         border: Border.all(
-          color: controller.text.isNotEmpty 
-              ? const Color(0xFF2E88F3) 
+          color: controller.text.isNotEmpty
+              ? const Color(0xFF2E88F3)
               : const Color(0xFFD1D5DB),
           width: 2,
         ),
@@ -44,9 +46,7 @@ class OtpInputField extends StatelessWidget {
           fontWeight: FontWeight.bold,
           color: const Color(0xFF374151),
         ),
-        inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-        ],
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         decoration: const InputDecoration(
           border: InputBorder.none,
           counterText: '',

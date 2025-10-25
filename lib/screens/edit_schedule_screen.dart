@@ -168,8 +168,6 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
     }
   }
 
-  // --- REMOVED _saveSchedule function ---
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -179,7 +177,6 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
           style: TextStyle(fontFamily: 'NotoLoopedThaiUI'),
         ),
         actions: [
-          // --- UPDATED Save Button: Pops with result ---
           IconButton(
             icon: const Icon(Icons.save),
             tooltip: 'บันทึก',

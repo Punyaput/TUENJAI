@@ -1,0 +1,11 @@
+flutter_native_splash:
+  color: "#FFFFFF" # Background color
+  # color_dark: "#272727" # Optional dark mode background
+  image: assets/images/splash_dev.png # Path to your DEV splash image
+  # image_dark: assets/images/splash_dark.png # Optional dark mode image
+
+  android_12:
+    # image: assets/images/android12_splash.png # Optional specific image for Android 12+
+    # icon_background_color: "#FFFFFF" # Background behind icon on Android 12+
+  # android_gravity: center # How image is positioned
+  # ... other options like fullscreen, branding, etc.

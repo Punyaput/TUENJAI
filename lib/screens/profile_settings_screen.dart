@@ -20,13 +20,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
-  // --- NEW: State for image file and existing URL ---
+  // --- State for image file and existing URL ---
   XFile? _imageFile; // New image selected by user
   String? _existingProfilePicUrl; // URL fetched from Firestore
   final ImagePicker _picker = ImagePicker();
   bool _isLoading = true; // Loading initial data
   bool _isSaving = false; // Saving changes
-  // --- END NEW ---
 
   @override
   void initState() {
@@ -34,7 +33,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     _loadUserData(); // Load existing data when screen opens
   }
 
-  // --- NEW: Load user data from Firestore ---
+  // --- Load user data from Firestore ---
   Future<void> _loadUserData() async {
     setState(() {
       _isLoading = true;
@@ -82,13 +81,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       }
     }
   }
-  // --- END NEW ---
 
   bool get _isFormValid {
     return _usernameController.text.trim().isNotEmpty && !_isSaving;
   }
 
-  // --- UPDATED: Image selection logic (same as setup) ---
+  // --- Image selection logic (same as setup) ---
   Future<void> _pickImage(ImageSource source) async {
     try {
       final XFile? pickedFile = await _picker.pickImage(
@@ -114,7 +112,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       ),
       builder: (context) {
         return Container(
-          /* ... (modal content is the same as setup) ... */
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -240,7 +237,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     }
   }
 
-  // --- UPDATED: Save profile changes ---
+  // --- Save profile changes ---
   void _saveProfile() async {
     if (!_isFormValid) return;
     setState(() {
@@ -331,7 +328,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       backgroundColor: const Color(0xFFF9FAFB),
       resizeToAvoidBottomInset: true, // Allow resize for keyboard
       appBar: AppBar(
-        /* ... (AppBar is mostly unchanged) ... */
         backgroundColor: const Color(0xFFF9FAFB),
         elevation: 0,
         leading: IconButton(
@@ -371,7 +367,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 ),
                 child: Column(
                   children: [
-                    // --- UPDATED Profile Image Section ---
+                    // --- Profile Image Section ---
                     GestureDetector(
                       onTap: _selectProfileImage,
                       child: Stack(
@@ -444,12 +440,10 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       ),
                     ),
 
-                    // --- END UPDATED ---
                     SizedBox(height: screenHeight * 0.04),
 
                     // Form Container
                     Container(
-                      /* ... (Form content is unchanged) ... */
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         color: Colors.white,

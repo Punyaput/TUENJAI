@@ -1,0 +1,7 @@
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path_android: "assets/launcher_icons/prod_foreground.png" # Path to PROD foreground
+  adaptive_icon_background: "#FFFFFF" # Or your prod background color/image
+  adaptive_icon_foreground: "assets/launcher_icons/prod_foreground.png" # Path to PROD foreground
+  min_sdk_android: 21

@@ -404,8 +404,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     }
   }
 
-  // --- Delete Group ---
-  // --- UPDATED: Delete Group function with member cleanup ---
   Future<void> _deleteGroup() async {
     setState(() {
       _isDeletingGroup = true;
@@ -473,7 +471,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       }
     }
   }
-  // --- END UPDATED DELETE ---
 
   void _showDeleteGroupDialog() {
     showDialog(
@@ -568,7 +565,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     );
   }
 
-  // --- UPDATED: Remove Member Logic (Resilient to "Ghosts") ---
   Future<void> _removeMember(String memberId) async {
     if (!_isCurrentUserGroupCaretaker) return;
     setState(() {
@@ -610,7 +606,6 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       }
     }
   }
-  // --- END UPDATED LOGIC ---
 
   // --- Accept/Deny Logic ---
   Future<void> _acceptMember(String memberId) async {

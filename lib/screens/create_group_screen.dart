@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/background_circles.dart';
-import 'dart:math'; // <-- IMPORT FOR RANDOM CODE
+import 'dart:math'; // <-- Import for Random()
 
 class CreateGroupScreen extends StatefulWidget {
   const CreateGroupScreen({super.key});
@@ -23,18 +23,16 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     return _nameController.text.trim().isNotEmpty && !_isLoading;
   }
 
-  // --- NEW FUNCTION to generate a 6-digit code ---
+  // Generate 8-character alphanumeric invite code
   String _generateInviteCode() {
     // Use uppercase, lowercase, and numbers
     const chars =
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final rnd = Random();
-    // Use 8 characters for much higher security
     return String.fromCharCodes(
       Iterable.generate(8, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))),
     );
   }
-  // --- END NEW FUNCTION ---
 
   Future<void> _saveGroup() async {
     if (!_isFormValid) return;
@@ -59,7 +57,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         'createdBy': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'members': [user.uid],
-        'inviteCode': inviteCode, // <-- ADD THE INVITE CODE
+        'inviteCode': inviteCode,
       });
 
       // 2. Add this new group's ID to the user's 'joinedGroups' list
@@ -86,7 +84,6 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (Your build method is unchanged)
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
 
@@ -132,7 +129,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 2),
                         ),

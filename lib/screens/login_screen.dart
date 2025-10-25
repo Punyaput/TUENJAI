@@ -114,7 +114,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- NEW FUNCTION TO SEND OTP ---
   void _sendOtp() async {
     // ... (This function is unchanged) ...
     if (!_isFormValid) return;
@@ -246,7 +245,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // --- UPDATED BUILD METHOD ---
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -258,7 +256,6 @@ class _LoginScreenState extends State<LoginScreen> {
       // for this layout.
       resizeToAvoidBottomInset: false,
 
-      // --- BODY IS NOW THE STACK ---
       body: Stack(
         children: [
           // 1. BACKGROUND CIRCLES (Static)

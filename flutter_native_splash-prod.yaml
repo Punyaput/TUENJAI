@@ -1,0 +1,9 @@
+flutter_native_splash:
+  color: "#FFFFFF"
+  # color_dark: "#272727"
+  image: assets/images/splash_prod.png # Path to your PROD splash image
+  # image_dark: assets/images/splash_dark.png
+
+  android_12:
+    # image: assets/images/android12_splash.png
+    # icon_background_color: "#FFFFFF"

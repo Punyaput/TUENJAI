@@ -214,7 +214,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     );
   }
 
-  // --- UPDATED BUILD METHOD ---
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -474,7 +473,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       ),
     );
   }
-  // --- END UPDATED BUILD METHOD ---
 
   @override
   void dispose() {

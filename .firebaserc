@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "androidappsf333",
+    "dev": "androidappsf333",
+    "prod": "tuenjai-prod"
+  },
+  "targets": {},
+  "etags": {}
+}

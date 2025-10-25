@@ -20,7 +20,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
   bool _isLoading = false;
 
   bool get _isFormValid {
-    // --- UPDATED: Check for 8 characters ---
+    // --- Check for 8 characters ---
     return _codeController.text.trim().length == 8 && !_isLoading;
   }
 
@@ -43,7 +43,6 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
     }
   }
 
-  // --- UPDATED: This function now SENDS A REQUEST ---
   Future<void> _joinGroupWithCode() async {
     if (_codeController.text.trim().length != 8) {
       _showError("รหัสเข้าร่วมต้องมี 8 ตัวอักษร");
@@ -87,8 +86,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
         throw Exception("คุณได้ส่งคำขอเข้าร่วมกลุ่มนี้ไปแล้ว");
       }
 
-      // --- 3. THIS IS THE CHANGE ---
-      // Add user to the 'pendingRequests' list instead of 'members'
+      // 3. Add user to the 'pendingRequests' list instead of 'members'
       await db.collection('groups').doc(groupId).update({
         'pendingRequests': FieldValue.arrayUnion([user.uid]),
       });
@@ -152,7 +150,6 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                 children: [
                   SizedBox(height: screenHeight * 0.05),
                   GestureDetector(
-                    /* ... (Scan QR Button is unchanged) ... */
                     onTap: _scanQRCode,
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 20),

@@ -1,0 +1,7 @@
+flutter_launcher_icons:
+  android: true
+  ios: false # We're ignoring iOS
+  image_path_android: "assets/launcher_icons/dev_foreground.png" # Path to DEV foreground
+  adaptive_icon_background: "#FFFFFF" # Example white background color
+  adaptive_icon_foreground: "assets/launcher_icons/dev_foreground.png" # Path to DEV foreground
+  min_sdk_android: 21 # Required for adaptive icons

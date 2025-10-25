@@ -6,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/background_circles.dart';
-import './edit_schedule_screen.dart'; // Needed for habit editing
+import './edit_schedule_screen.dart';
 
 enum TaskType { appointment, countdown, habit }
 
@@ -329,7 +329,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           .doc(widget.isEditing ? widget.taskId : null); // Use ID if editing
 
       if (widget.isEditing) {
-        // --- UPDATE ---
         // Don't update fields that shouldn't change
         dataToSave.remove('groupId');
 
@@ -348,7 +347,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         }
         await taskDocRef.update(dataToSave);
       } else {
-        // --- ADD ---
         dataToSave['createdBy'] = user.uid;
         dataToSave['createdAt'] = FieldValue.serverTimestamp();
         dataToSave['status'] = taskTypeString == 'habit_schedule'
@@ -392,8 +390,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      // --- UPDATE: Use resizeToAvoidBottomInset: true ---
-      // This is the default and works best with SingleChildScrollView
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: const Color(0xFFF9FAFB),
@@ -416,12 +412,10 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         child: Stack(
           children: [
             Positioned(
-              bottom: -screenWidth * 0.5, // Keep low
+              bottom: -screenWidth * 0.5,
               left: -screenWidth * 0.25,
               child: const BottomBackgroundCircles(),
             ),
-
-            // --- UPDATE: Use LayoutBuilder + ConstrainedBox ---
             LayoutBuilder(
               builder: (context, constraints) {
                 return Padding(
@@ -452,7 +446,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                                 child: Opacity(
                                   opacity: widget.isEditing ? 0.5 : 1.0,
                                   child: SegmentedButton<TaskType>(
-                                    // --- REPLACED SEGMENTS ---
                                     segments: const [
                                       ButtonSegment(
                                         value: TaskType.appointment,
@@ -481,7 +474,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                                         // Remove the 'label' property
                                       ),
                                     ],
-                                    // --- END REPLACEMENT ---
                                     selected: {_selectedType},
                                     onSelectionChanged: widget.isEditing
                                         ? null
@@ -540,7 +532,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 );
               },
             ),
-            // --- END UPDATE ---
           ],
         ),
       ),
@@ -584,7 +575,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
           // --- Type-Specific Fields ---
           if (_selectedType == TaskType.appointment) ...[
-            // --- USE WRAP FOR DATE/TIME PICKERS ---
             Wrap(
               spacing: 16.0, // Horizontal space between items
               runSpacing: 16.0, // Vertical space if items wrap

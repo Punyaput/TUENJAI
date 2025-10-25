@@ -1,3 +1,5 @@
+// lib/screens/initial_screen.dart
+
 import 'package:flutter/material.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/logo_widget.dart';

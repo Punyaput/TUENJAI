@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "285487496688",
+    "project_id": "tuenjai-prod",
+    "storage_bucket": "tuenjai-prod.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:285487496688:android:0e42abfa8e09d84d533135",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_sf333"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyABu1IrlDwPW_KxGqvlOZXmm_I5iGcM5Ww"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

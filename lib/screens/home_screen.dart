@@ -5,12 +5,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import '../services/notification_service.dart';
 import '../widgets/background_circles.dart';
 import '../widgets/custom_bottom_navigation.dart';
+import '../widgets/custom_fade_route.dart';
 import './groups_screen.dart';
 import './settings_screen.dart';
 import './login_screen.dart';
-import '../widgets/custom_fade_route.dart';
 // Removed GroupDetailScreen import as it's not directly needed here
 
 class HomeScreen extends StatefulWidget {
@@ -31,14 +32,16 @@ class _HomeScreenState extends State<HomeScreen> {
   final Map<String, String> _userNameCache = {};
   final Map<String, String> _groupNameCache = {};
 
+  final NotificationService _notificationService = NotificationService();
+
   final Map<String, Color> dayColors = {
-    'Monday': Colors.yellow.shade700,
-    'Tuesday': Colors.pink.shade400,
-    'Wednesday': Colors.green.shade500,
-    'Thursday': Colors.orange.shade600,
-    'Friday': Colors.blue.shade500,
-    'Saturday': Colors.purple.shade400,
-    'Sunday': Colors.red.shade500,
+    'วันจันทร์': Colors.yellow.shade700,
+    'วันอังคาร': Colors.pink.shade400,
+    'วันพุธ': Colors.green.shade500,
+    'วันพฤหัสบดี': Colors.orange.shade600,
+    'วันศุกร์': Colors.blue.shade500, // Corrected key
+    'วันเสาร์': Colors.purple.shade400,
+    'วันอาทิตย์': Colors.red.shade500,
   };
   final List<String> _dayLabelsShort = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
 
@@ -47,6 +50,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final Color _countdownColor = const Color(0xFF7ED6A8); // Green
   final Color _habitColor = Colors.purple.shade300; // Purple
   final Color _completedColor = Colors.green.shade600; // Completed Green
+  final Color _overdueColor = Colors.red.shade400; // Overdue Red
+  final Color _pendingColor = Colors.orange.shade600; // Pending Orange
+  final Color _todayEventColor = Colors.teal.shade400; // Today Event Teal
 
   @override
   void initState() {
@@ -122,10 +128,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return names;
   }
 
+  final Map<String, Map<String, String?>> _groupDataCache =
+      {}; // New: Stores {'name': '...', 'imageUrl': '...'}
+
   Future<void> _getGroupNames(List<String> groupIds) async {
     List<String> idsToFetch = [];
     for (String id in groupIds.toSet()) {
-      if (!_groupNameCache.containsKey(id) && id.isNotEmpty) {
+      if (!_groupDataCache.containsKey(id) && id.isNotEmpty) {
+        // Check new cache
         idsToFetch.add(id);
       }
     }
@@ -142,20 +152,44 @@ class _HomeScreenState extends State<HomeScreen> {
               .where(FieldPath.documentId, whereIn: batchIds)
               .get();
           for (var doc in querySnapshot.docs) {
-            final name = doc.data()['groupName'] ?? 'กลุ่มไม่มีชื่อ';
-            _groupNameCache[doc.id] = name;
+            final data = doc.data();
+            final name = data['groupName'] ?? 'กลุ่มไม่มีชื่อ';
+            final imageUrl = data['groupImageUrl'] as String?; // Get image URL
+            _groupDataCache[doc.id] = {
+              'name': name,
+              'imageUrl': imageUrl,
+            }; // Store both
           }
         }
       } catch (e) {
-        // Ignore individual fetch errors
+        // Ignore fetch errors
       }
     }
+    // Ensure default entries exist even if fetch failed partially
     for (String id in groupIds) {
-      _groupNameCache.putIfAbsent(id, () => 'กลุ่มไม่มีชื่อ');
+      _groupDataCache.putIfAbsent(
+        id,
+        () => {'name': 'กลุ่มไม่มีชื่อ', 'imageUrl': null},
+      );
     }
     if (idsToFetch.isNotEmpty && mounted) {
-      setState(() {});
-    } // Trigger rebuild after fetching
+      setState(() {}); // Trigger rebuild after fetching
+    }
+  }
+
+  // --- NEW HELPER ---
+  /// Parses a "HH:mm" time string into a DateTime object for a given day.
+  DateTime? _parseTimeString(String timeStr, DateTime today) {
+    try {
+      final parts = timeStr.split(':');
+      if (parts.length != 2) return null;
+      final hour = int.tryParse(parts[0]);
+      final minute = int.tryParse(parts[1]);
+      if (hour == null || minute == null) return null;
+      return DateTime(today.year, today.month, today.day, hour, minute);
+    } catch (e) {
+      return null;
+    }
   }
 
   void _logout() {
@@ -204,15 +238,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
     final today = DateTime.now();
-    final weekdayName = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ][today.weekday - 1];
+    final thaiWeekdayName = DateFormat(
+      'EEEE',
+      'th',
+    ).format(today); // e.g., "วันเสาร์"
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       body: SafeArea(
@@ -234,7 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     SizedBox(height: screenHeight * 0.02),
                     _buildHeader(screenWidth),
                     SizedBox(height: screenHeight * 0.02),
-                    _buildTodayLabel(weekdayName, screenWidth),
+                    _buildTodayLabel(thaiWeekdayName, today, screenWidth),
                     SizedBox(height: screenHeight * 0.03),
                     if (_userRole == 'caretaker')
                       _buildCaretakerContent(screenWidth)
@@ -303,19 +332,30 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildTodayLabel(String weekdayName, double screenWidth) {
+  Widget _buildTodayLabel(
+    String thaiWeekdayName,
+    DateTime today,
+    double screenWidth,
+  ) {
+    // Format the date part: e.g., "25 ตุลาคม 2025"
+    final formattedDate = DateFormat('d MMMM y', 'th').format(today);
+    // Combine strings: "วันนี้ วันเสาร์ที่ 25 ตุลาคม 2025"
+    final fullDateString = 'วันนี้ $thaiWeekdayName\ที่ $formattedDate';
+    // Get the color using the Thai weekday name
+    final Color labelColor = dayColors[thaiWeekdayName] ?? Colors.black;
+
     return Text(
-      weekdayName,
+      fullDateString,
       style: TextStyle(
         fontFamily: 'NotoLoopedThaiUI',
-        fontSize: screenWidth * 0.06,
+        fontSize: screenWidth * 0.055, // Adjusted size slightly
         fontWeight: FontWeight.bold,
-        color: dayColors[weekdayName] ?? Colors.black,
+        color: labelColor, // Apply color to the whole string
       ),
     );
   }
 
-  // --- REFINED: Content for Caretakers (Grouped Dashboard) ---
+  // --- Content for Caretakers (Grouped Dashboard) ---
   Widget _buildCaretakerContent(double screenWidth) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -360,8 +400,8 @@ class _HomeScreenState extends State<HomeScreen> {
               }
 
               final allTasks = taskSnapshot.data!.docs;
-              final now = DateTime.now();
-              final today = DateTime(now.year, now.month, now.day);
+              final now = DateTime.now(); // <-- Has time
+              final today = DateTime(now.year, now.month, now.day); // Date only
               final todayKey = DateFormat('yyyy-MM-dd').format(today);
               final todayWeekday = today.weekday;
 
@@ -386,14 +426,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   groupId,
                   () => {
                     'pending_today': [],
+                    'overdue_today': [], // <-- NEW
                     'completed_today': [],
+                    'todays_countdowns': [], // <-- NEW
                     'habits': [],
                     'upcoming': [],
                   },
                 );
                 final Timestamp? ts = task['taskDateTime'];
-                DateTime? taskDate;
-                DateTime? taskDayOnly;
+                DateTime? taskDate; // Has time
+                DateTime? taskDayOnly; // Date only
                 if (ts != null) {
                   taskDate = ts.toDate();
                   taskDayOnly = DateTime(
@@ -428,30 +470,42 @@ class _HomeScreenState extends State<HomeScreen> {
                             ?.cast<String, String>() ??
                         {};
                     for (var subTask in tasksForToday) {
-                      final subTaskTime = subTask['time'] ?? '';
+                      final subTaskTimeStr = subTask['time'] ?? '';
                       final subTaskTitle = subTask['title'] ?? '';
                       final subTaskKey =
-                          '${todayKey}_${subTaskTime}_$subTaskTitle';
+                          '${todayKey}_${subTaskTimeStr}_$subTaskTitle';
                       final isCompleted =
                           completionHistory[subTaskKey] == 'completed';
+
                       final itemData = {
                         'type': 'habit_item',
                         'id': doc.id,
                         'groupId': groupId,
                         'subTaskKey': subTaskKey,
-                        'time': subTaskTime,
+                        'time': subTaskTimeStr,
                         'title': subTaskTitle,
                         'assignedTo': assignedTo,
                         'isCompleted': isCompleted,
                         'data': task,
-                      }; // Pass main task data for context
+                      };
+
                       if (isCompleted) {
                         groupedCategorizedTasks[groupId]!['completed_today']!
                             .add(itemData);
                       } else {
-                        groupedCategorizedTasks[groupId]!['pending_today']!.add(
-                          itemData,
+                        // Check if overdue
+                        final subTaskDateTime = _parseTimeString(
+                          subTaskTimeStr,
+                          today,
                         );
+                        if (subTaskDateTime != null &&
+                            subTaskDateTime.isBefore(now)) {
+                          groupedCategorizedTasks[groupId]!['overdue_today']!
+                              .add(itemData);
+                        } else {
+                          groupedCategorizedTasks[groupId]!['pending_today']!
+                              .add(itemData);
+                        }
                       }
                     }
                   }
@@ -466,7 +520,17 @@ class _HomeScreenState extends State<HomeScreen> {
                             'data': task,
                             'isCompleted': true,
                           });
+                    } else if (taskDate != null && taskDate.isBefore(now)) {
+                      // Today but time has passed
+                      groupedCategorizedTasks[groupId]!['overdue_today']!.add({
+                        'type': 'appointment',
+                        'id': doc.id,
+                        'groupId': groupId,
+                        'data': task,
+                        'isCompleted': false,
+                      });
                     } else {
+                      // Today but time has not passed
                       groupedCategorizedTasks[groupId]!['pending_today']!.add({
                         'type': 'appointment',
                         'id': doc.id,
@@ -476,6 +540,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       });
                     }
                   } else if (taskDate != null && taskDate.isAfter(today)) {
+                    // Future appointment
                     groupedCategorizedTasks[groupId]!['upcoming']!.add({
                       'type': 'appointment',
                       'id': doc.id,
@@ -485,8 +550,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   } else if (taskDate != null &&
                       taskDate.isBefore(today) &&
                       status == 'pending') {
-                    // Overdue appointments - add to pending
-                    groupedCategorizedTasks[groupId]!['pending_today']!.add({
+                    // Overdue from *previous* days
+                    groupedCategorizedTasks[groupId]!['overdue_today']!.add({
                       'type': 'appointment',
                       'id': doc.id,
                       'groupId': groupId,
@@ -495,15 +560,28 @@ class _HomeScreenState extends State<HomeScreen> {
                     });
                   }
                 } else if (type == 'countdown') {
-                  if (taskDate != null &&
-                      (taskDate.isAtSameMomentAs(today) ||
-                          taskDate.isAfter(today))) {
-                    groupedCategorizedTasks[groupId]!['upcoming']!.add({
-                      'type': 'countdown',
-                      'id': doc.id,
-                      'groupId': groupId,
-                      'data': task,
-                    });
+                  if (taskDate == null) continue;
+                  final int days = taskDayOnly!.difference(today).inDays;
+                  final itemData = {
+                    // <-- Create itemData once
+                    'type': 'countdown',
+                    'id': doc.id,
+                    'groupId': groupId,
+                    'data': task,
+                  };
+                  if (days == 0) {
+                    groupedCategorizedTasks[groupId]!['todays_countdowns']!.add(
+                      itemData,
+                    );
+                  } else if (days > 0) {
+                    groupedCategorizedTasks[groupId]!['upcoming']!.add(
+                      itemData,
+                    );
+                  } else if (days < 0) {
+                    // <-- ADD THIS
+                    groupedCategorizedTasks[groupId]!['overdue_today']!.add(
+                      itemData,
+                    );
                   }
                 }
               }
@@ -513,7 +591,13 @@ class _HomeScreenState extends State<HomeScreen> {
               // Sort items within categories for each group
               groupedCategorizedTasks.forEach((groupId, categories) {
                 categories['pending_today']?.sort(_sortTaskItems);
+                categories['overdue_today']?.sort(
+                  _sortTaskItems,
+                ); // Sort new list
                 categories['completed_today']?.sort(_sortCompletedItems);
+                categories['todays_countdowns']?.sort(
+                  _sortUpcomingItems,
+                ); // Sort new list
                 categories['upcoming']?.sort(_sortUpcomingItems);
                 categories['habits']?.sort(
                   (a, b) => (a['data']['title'] ?? '').compareTo(
@@ -534,7 +618,9 @@ class _HomeScreenState extends State<HomeScreen> {
               final relevantGroupIds = sortedGroupIds.where((groupId) {
                 final categories = groupedCategorizedTasks[groupId]!;
                 return categories['pending_today']!.isNotEmpty ||
+                    categories['overdue_today']!.isNotEmpty ||
                     categories['completed_today']!.isNotEmpty ||
+                    categories['todays_countdowns']!.isNotEmpty ||
                     categories['habits']!.isNotEmpty ||
                     categories['upcoming']!.isNotEmpty;
               }).toList();
@@ -549,95 +635,214 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemCount: relevantGroupIds.length,
                 itemBuilder: (context, index) {
                   final groupId = relevantGroupIds[index];
-                  final groupName = _groupNameCache[groupId] ?? 'Loading...';
+                  final groupData =
+                      _groupDataCache[groupId] ??
+                      {'name': 'Loading...', 'imageUrl': null};
+                  final groupName = groupData['name'] ?? 'Loading...';
+                  final groupImageUrl = groupData['imageUrl']; // Get the URL
                   final categories = groupedCategorizedTasks[groupId]!;
                   final pendingToday = categories['pending_today']!;
+                  final overdueToday = categories['overdue_today']!; // New
                   final completedToday = categories['completed_today']!;
+                  final todaysCountdowns =
+                      categories['todays_countdowns']!; // New
                   final habits = categories['habits']!;
                   final upcoming = categories['upcoming']!;
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Group Header
-                      Padding(
-                        padding: EdgeInsets.only(
-                          top: index == 0 ? 0 : 24.0,
-                          bottom: 10.0,
-                        ),
-                        child: Text(
-                          groupName,
-                          style: TextStyle(
-                            fontFamily: 'NotoLoopedThaiUI',
-                            fontSize: screenWidth * 0.055,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-
-                      // Sections for this group
-                      if (pendingToday.isNotEmpty) ...[
-                        _buildSectionHeader(
-                          'วันนี้ (รอดำเนินการ)',
-                          Icons.radio_button_unchecked,
-                          Colors.orange,
-                          screenWidth,
-                        ),
-                        ...pendingToday.map(
-                          (item) => _buildDashboardItemCard(item, screenWidth),
-                        ),
-                      ],
-                      if (completedToday.isNotEmpty) ...[
-                        _buildSectionHeader(
-                          'วันนี้ (เสร็จสิ้น)',
-                          Icons.check_circle,
-                          _completedColor,
-                          screenWidth,
-                        ),
-                        ...completedToday.map(
-                          (item) => _buildDashboardItemCard(
-                            item,
-                            screenWidth,
-                            isCompleted: true,
-                          ),
-                        ),
-                      ],
-                      if (habits.isNotEmpty) ...[
-                        _buildSectionHeader(
-                          'กิจวัตรที่ใช้งานอยู่',
-                          Icons.calendar_month,
-                          _habitColor,
-                          screenWidth,
-                        ),
-                        ...habits.map(
-                          (item) => _buildHabitScheduleSummaryCard(
-                            item['data'],
-                            screenWidth,
-                          ),
-                        ),
-                      ],
-                      if (upcoming.isNotEmpty) ...[
-                        _buildSectionHeader(
-                          'งานที่กำลังจะมาถึง',
-                          Icons.hourglass_bottom,
-                          Colors.grey,
-                          screenWidth,
-                        ),
-                        ...upcoming.map(
-                          (item) => item['type'] == 'countdown'
-                              ? _buildCountdownCard(item['data'], screenWidth)
-                              : _buildAppointmentCardReadOnly(
-                                  item['data'],
-                                  screenWidth,
+                  // --- UI CHANGE: Wrap sections in a Card ---
+                  return Card(
+                    elevation: 2.0,
+                    shadowColor: Colors.black.withOpacity(0.08),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    color: Colors.white,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Group Header
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+                          child: Row(
+                            // Wrap in a Row
+                            children: [
+                              // Group Image Avatar
+                              CircleAvatar(
+                                radius:
+                                    screenWidth * 0.05, // Adjust size as needed
+                                backgroundColor: Colors.grey.shade200,
+                                backgroundImage:
+                                    (groupImageUrl != null &&
+                                        groupImageUrl.isNotEmpty)
+                                    ? NetworkImage(groupImageUrl)
+                                    : null,
+                                child:
+                                    (groupImageUrl == null ||
+                                        groupImageUrl.isEmpty)
+                                    ? Icon(
+                                        // Fallback icon
+                                        Icons.group,
+                                        size: screenWidth * 0.05,
+                                        color: Colors.grey.shade500,
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(width: 12), // Spacing
+                              // Group Name Text (Expanded to fill remaining space)
+                              Expanded(
+                                child: Text(
+                                  groupName,
+                                  style: TextStyle(
+                                    fontFamily: 'NotoLoopedThaiUI',
+                                    fontSize:
+                                        screenWidth *
+                                        0.055, // Or receiver's 0.05
+                                    fontWeight: FontWeight.bold,
+                                    color:
+                                        Colors.black87, // Or receiver's black54
+                                  ),
+                                  overflow:
+                                      TextOverflow.ellipsis, // Prevent overflow
                                 ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
 
-                      // Add a small divider between groups if desired
-                      if (index < relevantGroupIds.length - 1)
-                        const Divider(height: 30, thickness: 0.5),
-                    ],
+                        // Sections for this group
+                        if (pendingToday.isNotEmpty) ...[
+                          _buildSectionHeader(
+                            'วันนี้ (รอดำเนินการ)',
+                            Icons.radio_button_unchecked,
+                            _pendingColor,
+                            screenWidth,
+                          ),
+                          ...pendingToday.map(
+                            (item) => InkWell(
+                              onTap: () => _showTaskDetailModal(
+                                context,
+                                item,
+                              ), // Pass the whole item map
+                              child: _buildDashboardItemCard(item, screenWidth),
+                            ),
+                          ),
+                        ],
+                        if (overdueToday.isNotEmpty) ...[
+                          _buildSectionHeader(
+                            'ผ่านไปแล้ว',
+                            Icons.warning_amber_rounded,
+                            _overdueColor,
+                            screenWidth,
+                          ),
+                          ...overdueToday.map(
+                            (item) => InkWell(
+                              onTap: () => _showTaskDetailModal(
+                                context,
+                                item,
+                              ), // Pass the whole item map
+                              child: _buildDashboardItemCard(item, screenWidth),
+                            ),
+                          ),
+                        ],
+                        if (completedToday.isNotEmpty) ...[
+                          _buildSectionHeader(
+                            'วันนี้ (เสร็จสิ้น)',
+                            Icons.check_circle,
+                            _completedColor,
+                            screenWidth,
+                          ),
+                          ...completedToday.map(
+                            (item) => InkWell(
+                              onTap: () => _showTaskDetailModal(
+                                context,
+                                item,
+                              ), // Pass the whole item map
+                              child: _buildDashboardItemCard(
+                                item,
+                                screenWidth,
+                                isCompleted: true,
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (todaysCountdowns.isNotEmpty) ...[
+                          _buildSectionHeader(
+                            'กิจกรรมวันนี้!',
+                            Icons.celebration_rounded,
+                            _todayEventColor,
+                            screenWidth,
+                          ),
+                          ...todaysCountdowns.map(
+                            (item) => InkWell(
+                              onTap: () => _showTaskDetailModal(
+                                context,
+                                item,
+                              ), // Pass the whole item map
+                              child: _buildCountdownCard(
+                                item['data'],
+                                screenWidth,
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (habits.isNotEmpty) ...[
+                          _buildSectionHeader(
+                            'กิจวัตรที่ใช้งานอยู่',
+                            Icons.calendar_month,
+                            _habitColor,
+                            screenWidth,
+                          ),
+                          ...habits.map((item) {
+                            // Construct the data map needed by the modal
+                            final itemDataForModal = {
+                              'type': 'habit_schedule',
+                              'data': item['data'],
+                              'id': item['id'],
+                              'groupId':
+                                  item['data']['groupId'] ??
+                                  '', // Ensure groupId is included
+                            };
+                            return InkWell(
+                              onTap: () => _showTaskDetailModal(
+                                context,
+                                itemDataForModal,
+                              ),
+                              child: _buildHabitScheduleSummaryCard(
+                                item['data'],
+                                screenWidth,
+                              ),
+                            );
+                          }),
+                        ],
+                        if (upcoming.isNotEmpty) ...[
+                          _buildSectionHeader(
+                            'งานที่กำลังมาถึง',
+                            Icons.hourglass_bottom,
+                            Colors.grey.shade600,
+                            screenWidth,
+                          ),
+                          ...upcoming.map(
+                            (item) => InkWell(
+                              onTap: () => _showTaskDetailModal(
+                                context,
+                                item,
+                              ), // Pass the whole item map
+                              child: item['type'] == 'countdown'
+                                  ? _buildCountdownCard(
+                                      item['data'],
+                                      screenWidth,
+                                    )
+                                  : _buildAppointmentCardReadOnly(
+                                      item['data'],
+                                      screenWidth,
+                                    ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 10), // Padding at card bottom
+                      ],
+                    ),
                   );
                 },
               );
@@ -648,14 +853,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- UPDATED: Content for Care Receivers (Grouped & Categorized) ---
+  // --- Content for Care Receivers (Grouped & Categorized) ---
   Widget _buildCareReceiverContent(double screenWidth) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return const Expanded(child: Center(child: Text('ไม่พบผู้ใช้งาน')));
     }
-    final todayWeekday = DateTime.now().weekday;
-    final todayDateKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
     return Expanded(
       child: FutureBuilder<DocumentSnapshot>(
@@ -681,6 +884,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collectionGroup('tasks')
+                // Add filter for relevant tasks
                 .where('groupId', whereIn: joinedGroups)
                 .snapshots(),
             builder: (context, taskSnapshot) {
@@ -697,6 +901,15 @@ class _HomeScreenState extends State<HomeScreen> {
               }
 
               final allTasks = taskSnapshot.data!.docs;
+
+              // Schedule all notifications for the user
+              _scheduleReceiverNotifications(allTasks, user.uid);
+
+              final now = DateTime.now(); // <-- Has time
+              final today = DateTime(now.year, now.month, now.day); // Date only
+              final todayKey = DateFormat('yyyy-MM-dd').format(today);
+              final todayWeekday = today.weekday;
+
               // --- Process, Group, and Filter Tasks for CareReceiver ---
               final Map<String, Map<String, List<Map<String, dynamic>>>>
               groupedCategorizedTasks = {};
@@ -711,18 +924,48 @@ class _HomeScreenState extends State<HomeScreen> {
                 final assignedTo =
                     (task['assignedTo'] as List?)?.cast<String>() ?? [];
 
+                // --- Universal relevance check ---
+                bool relevantToUser = false;
+                if (type == 'countdown') {
+                  relevantToUser = true; // Countdowns are for everyone
+                } else if (assignedTo.contains(user.uid)) {
+                  relevantToUser = true; // Assigned to this user
+                }
+                if (!relevantToUser) continue; // Skip task if not relevant
+                // --- End check ---
+
                 // Initialize group map
                 groupedCategorizedTasks.putIfAbsent(
                   groupId,
                   () => {
                     'pending_habits': [],
                     'pending_appointments': [],
+                    'overdue_habits': [], // <-- NEW
+                    'overdue_appointments': [], // <-- NEW
+                    'overdue_countdowns': [],
+                    'completed_today': [], // <-- NEW
+                    'todays_countdowns': [], // <-- NEW
+                    'upcoming_appointments': [], // <-- NEW
                     'upcoming_countdowns': [],
                   },
                 );
 
+                final Timestamp? ts = task['taskDateTime'];
+                DateTime? taskDate; // Has time
+                DateTime? taskDayOnly; // Date only
+                if (ts != null) {
+                  taskDate = ts.toDate();
+                  taskDayOnly = DateTime(
+                    taskDate.year,
+                    taskDate.month,
+                    taskDate.day,
+                  );
+                }
+                bool isToday =
+                    taskDayOnly != null && taskDayOnly.isAtSameMomentAs(today);
+
                 // Categorize and Filter
-                if (type == 'habit_schedule' && assignedTo.contains(user.uid)) {
+                if (type == 'habit_schedule') {
                   final schedule =
                       (task['schedule'] as Map?)
                           ?.cast<String, List<dynamic>>() ??
@@ -742,43 +985,90 @@ class _HomeScreenState extends State<HomeScreen> {
                         {};
                     for (var i = 0; i < tasksForToday.length; i++) {
                       final subTask = tasksForToday[i];
-                      final subTaskTime = subTask['time'] ?? 'no_time_$i';
+                      final subTaskTimeStr = subTask['time'] ?? 'no_time_$i';
                       final subTaskTitle = subTask['title'] ?? 'no_title_$i';
                       final subTaskKey =
-                          '${todayDateKey}_${subTaskTime}_$subTaskTitle';
+                          '${todayKey}_${subTaskTimeStr}_$subTaskTitle';
                       final isCompleted =
                           completionHistory[subTaskKey] == 'completed';
-                      if (!isCompleted) {
-                        groupedCategorizedTasks[groupId]!['pending_habits']!
-                            .add({
-                              'habitDocId': doc.id,
-                              'groupId': groupId,
-                              'subTaskKey': subTaskKey,
-                              'time': subTaskTime.startsWith('no_time')
-                                  ? '--:--'
-                                  : subTaskTime,
-                              'title': subTaskTitle.startsWith('no_title')
-                                  ? 'ไม่มีชื่อ'
-                                  : subTaskTitle,
-                            });
+
+                      final itemData = {
+                        'type': 'habit_item', // For card builder
+                        'habitDocId': doc.id,
+                        'groupId': groupId,
+                        'subTaskKey': subTaskKey,
+                        'time': subTaskTimeStr.startsWith('no_time')
+                            ? '--:--'
+                            : subTaskTimeStr,
+                        'title': subTaskTitle.startsWith('no_title')
+                            ? 'ไม่มีชื่อ'
+                            : subTaskTitle,
+                        'isCompleted': isCompleted,
+                      };
+
+                      if (isCompleted) {
+                        groupedCategorizedTasks[groupId]!['completed_today']!
+                            .add(itemData);
+                      } else {
+                        final subTaskDateTime = _parseTimeString(
+                          subTaskTimeStr,
+                          today,
+                        );
+                        if (subTaskDateTime != null &&
+                            subTaskDateTime.isBefore(now)) {
+                          groupedCategorizedTasks[groupId]!['overdue_habits']!
+                              .add(itemData);
+                        } else {
+                          groupedCategorizedTasks[groupId]!['pending_habits']!
+                              .add(itemData);
+                        }
                       }
                     }
                   }
-                } else if (type == 'appointment' &&
-                    status == 'pending' &&
-                    assignedTo.contains(user.uid)) {
-                  groupedCategorizedTasks[groupId]!['pending_appointments']!
-                      .add({'id': doc.id, 'data': task});
+                } else if (type == 'appointment') {
+                  final itemData = {
+                    'type': 'appointment', // For card builder
+                    'id': doc.id,
+                    'data': task,
+                    'isCompleted': status == 'completed',
+                  };
+
+                  if (isToday) {
+                    if (status == 'completed') {
+                      groupedCategorizedTasks[groupId]!['completed_today']!.add(
+                        itemData,
+                      );
+                    } else if (taskDate != null && taskDate.isBefore(now)) {
+                      groupedCategorizedTasks[groupId]!['overdue_appointments']!
+                          .add(itemData);
+                    } else {
+                      groupedCategorizedTasks[groupId]!['pending_appointments']!
+                          .add(itemData);
+                    }
+                  } else if (taskDate != null && taskDate.isAfter(today)) {
+                    groupedCategorizedTasks[groupId]!['upcoming_appointments']!
+                        .add(itemData);
+                  } else if (taskDate != null &&
+                      taskDate.isBefore(today) &&
+                      status == 'pending') {
+                    groupedCategorizedTasks[groupId]!['overdue_appointments']!
+                        .add(itemData);
+                  }
                 } else if (type == 'countdown') {
-                  final Timestamp? ts = task['taskDateTime'];
-                  if (ts == null) continue;
-                  final taskDate = ts.toDate();
-                  final now = DateTime.now();
-                  final today = DateTime(now.year, now.month, now.day);
-                  if (taskDate.isAtSameMomentAs(today) ||
-                      taskDate.isAfter(today)) {
-                    groupedCategorizedTasks[groupId]!['upcoming_countdowns']!
-                        .add({'id': doc.id, 'data': task});
+                  if (taskDate == null) continue;
+                  final int days = taskDayOnly!.difference(today).inDays;
+                  final itemData = {
+                    'id': doc.id,
+                    'data': task,
+                    'type': 'countdown',
+                  }; // <-- Add type
+                  if (days == 0) {
+                    // ... (add to 'todays_countdowns')
+                  } else if (days > 0) {
+                    // ... (add to 'upcoming_countdowns')
+                  } else if (days < 0) {
+                    groupedCategorizedTasks[groupId]!['overdue_countdowns']!
+                        .add(itemData);
                   }
                 }
               }
@@ -789,6 +1079,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 categories['pending_habits']?.sort(
                   (a, b) => (a['time'] ?? '99').compareTo(b['time'] ?? '99'),
                 );
+                categories['overdue_habits']?.sort(
+                  (a, b) => (a['time'] ?? '99').compareTo(b['time'] ?? '99'),
+                );
                 categories['pending_appointments']?.sort(
                   (a, b) =>
                       (a['data']['taskDateTime'] as Timestamp?)?.compareTo(
@@ -797,7 +1090,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ) ??
                       0,
                 );
-                categories['upcoming_countdowns']?.sort(
+                categories['overdue_appointments']?.sort(
                   (a, b) =>
                       (a['data']['taskDateTime'] as Timestamp?)?.compareTo(
                         b['data']['taskDateTime'] as Timestamp? ??
@@ -805,6 +1098,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       ) ??
                       0,
                 );
+                categories['completed_today']?.sort(
+                  _sortCompletedItems,
+                ); // Use helper
+                categories['todays_countdowns']?.sort(
+                  _sortUpcomingItems,
+                ); // Use helper
+                categories['upcoming_appointments']?.sort(
+                  _sortUpcomingItems,
+                ); // Use helper
+                categories['upcoming_countdowns']?.sort(
+                  _sortUpcomingItems,
+                ); // Use helper
               });
 
               // Sort groups by name
@@ -820,6 +1125,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 final categories = groupedCategorizedTasks[groupId]!;
                 return categories['pending_habits']!.isNotEmpty ||
                     categories['pending_appointments']!.isNotEmpty ||
+                    categories['overdue_habits']!.isNotEmpty ||
+                    categories['overdue_appointments']!.isNotEmpty ||
+                    categories['completed_today']!.isNotEmpty ||
+                    categories['todays_countdowns']!.isNotEmpty ||
+                    categories['upcoming_appointments']!.isNotEmpty ||
                     categories['upcoming_countdowns']!.isNotEmpty;
               }).toList();
 
@@ -833,75 +1143,237 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemCount: relevantGroupIds.length,
                 itemBuilder: (context, index) {
                   final groupId = relevantGroupIds[index];
-                  final groupName = _groupNameCache[groupId] ?? 'Loading...';
+                  final groupData =
+                      _groupDataCache[groupId] ??
+                      {'name': 'Loading...', 'imageUrl': null};
+                  final groupName = groupData['name'] ?? 'Loading...';
+                  final groupImageUrl = groupData['imageUrl']; // Get the URL
                   final categories = groupedCategorizedTasks[groupId]!;
                   final pendingHabits = categories['pending_habits']!;
                   final pendingAppointments =
                       categories['pending_appointments']!;
+                  final overdueHabits = categories['overdue_habits']!;
+                  final overdueAppointments =
+                      categories['overdue_appointments']!;
+                  final overdueCountdowns = categories['overdue_countdowns']!;
+                  final completedToday = categories['completed_today']!;
+                  final todaysCountdowns = categories['todays_countdowns']!;
+                  final upcomingAppointments =
+                      categories['upcoming_appointments']!;
                   final upcomingCountdowns = categories['upcoming_countdowns']!;
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.only(
-                          top: index == 0 ? 0 : 24.0,
-                          bottom: 10.0,
-                        ),
-                        child: Text(
-                          groupName,
-                          style: TextStyle(
-                            fontFamily: 'NotoLoopedThaiUI',
-                            fontSize: screenWidth * 0.05,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black54,
+                  // Combine pending/overdue lists for simplicity
+                  final allPending = [...pendingHabits, ...pendingAppointments]
+                    ..sort(_sortTaskItems);
+                  final allOverdue = [...overdueHabits, ...overdueAppointments]
+                    ..sort(_sortTaskItems);
+                  final allUpcoming = [
+                    ...upcomingAppointments,
+                    ...upcomingCountdowns,
+                  ]..sort(_sortUpcomingItems);
+
+                  return Card(
+                    elevation: 2.0,
+                    shadowColor: Colors.black.withOpacity(0.08),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    color: Colors.white,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+                          child: Row(
+                            // Wrap in a Row
+                            children: [
+                              // Group Image Avatar
+                              CircleAvatar(
+                                radius:
+                                    screenWidth * 0.05, // Adjust size as needed
+                                backgroundColor: Colors.grey.shade200,
+                                backgroundImage:
+                                    (groupImageUrl != null &&
+                                        groupImageUrl.isNotEmpty)
+                                    ? NetworkImage(groupImageUrl)
+                                    : null,
+                                child:
+                                    (groupImageUrl == null ||
+                                        groupImageUrl.isEmpty)
+                                    ? Icon(
+                                        // Fallback icon
+                                        Icons.group,
+                                        size: screenWidth * 0.05,
+                                        color: Colors.grey.shade500,
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(width: 12), // Spacing
+                              // Group Name Text (Expanded to fill remaining space)
+                              Expanded(
+                                child: Text(
+                                  groupName,
+                                  style: TextStyle(
+                                    fontFamily: 'NotoLoopedThaiUI',
+                                    fontSize:
+                                        screenWidth *
+                                        0.055, // Or receiver's 0.05
+                                    fontWeight: FontWeight.bold,
+                                    color:
+                                        Colors.black87, // Or receiver's black54
+                                  ),
+                                  overflow:
+                                      TextOverflow.ellipsis, // Prevent overflow
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
 
-                      // Display pending items combined or sectioned? Let's section.
-                      if (pendingHabits.isNotEmpty) ...[
-                        _buildSectionHeader(
-                          'กิจวัตรวันนี้',
-                          Icons.calendar_month_outlined,
-                          _habitColor,
-                          screenWidth,
-                        ),
-                        ...pendingHabits.map(
-                          (item) => _buildHabitItemCard(item, screenWidth),
-                        ),
-                      ],
-                      if (pendingAppointments.isNotEmpty) ...[
-                        _buildSectionHeader(
-                          'นัดหมายวันนี้/ค้าง',
-                          Icons.event_available_outlined,
-                          _appointmentColor,
-                          screenWidth,
-                        ),
-                        ...pendingAppointments.map(
-                          (item) => _buildAppointmentCard(
-                            item['data'],
-                            item['id'],
+                        // Sections for this group
+                        if (allPending.isNotEmpty) ...[
+                          _buildSectionHeader(
+                            'วันนี้ (รอดำเนินการ)',
+                            Icons.radio_button_unchecked,
+                            _pendingColor,
                             screenWidth,
                           ),
-                        ),
+                          ...allPending.map((item) {
+                            // Determine which card widget to build based on the item type
+                            Widget cardWidget;
+                            if (item['type'] == 'habit_item') {
+                              cardWidget = _buildHabitItemCard(
+                                item,
+                                screenWidth,
+                              ); //
+                            } else {
+                              // Assuming appointment
+                              cardWidget = _buildAppointmentCard(
+                                item['data'], //
+                                item['id'], //
+                                screenWidth,
+                              );
+                            }
+
+                            // Return the InkWell wrapping the determined card widget
+                            return InkWell(
+                              onTap: () => _showTaskDetailModal(
+                                context,
+                                item,
+                              ), // Call the modal function
+                              child: cardWidget, // Display the appropriate card
+                            );
+                          }),
+                        ],
+                        if (allOverdue.isNotEmpty) ...[
+                          _buildSectionHeader(
+                            'ผ่านไปแล้ว',
+                            Icons.warning_amber_rounded,
+                            _overdueColor,
+                            screenWidth,
+                          ),
+                          ...allOverdue.map((item) {
+                            // Determine which card widget to build
+                            Widget cardWidget;
+                            if (item['type'] == 'habit_item') {
+                              cardWidget = _buildHabitItemCard(
+                                item,
+                                screenWidth,
+                              ); //
+                            } else if (item['type'] == 'appointment') {
+                              cardWidget = _buildAppointmentCard(
+                                item['data'], //
+                                item['id'], //
+                                screenWidth,
+                              );
+                            } else {
+                              // Assuming countdown
+                              cardWidget = _buildCountdownCard(
+                                item['data'], //
+                                screenWidth,
+                              );
+                            }
+
+                            // Return the InkWell wrapping the determined card widget
+                            return InkWell(
+                              onTap: () => _showTaskDetailModal(
+                                context,
+                                item,
+                              ), // Call the modal function
+                              child: cardWidget, // Display the appropriate card
+                            );
+                          }),
+                        ],
+                        if (completedToday.isNotEmpty) ...[
+                          _buildSectionHeader(
+                            'วันนี้ (เสร็จสิ้น)',
+                            Icons.check_circle,
+                            _completedColor,
+                            screenWidth,
+                          ),
+                          ...completedToday.map(
+                            (item) => InkWell(
+                              onTap: () => _showTaskDetailModal(
+                                context,
+                                item,
+                              ), // Pass the whole item map
+                              child: _buildDashboardItemCard(
+                                item,
+                                screenWidth,
+                                isCompleted: true,
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (todaysCountdowns.isNotEmpty) ...[
+                          _buildSectionHeader(
+                            'กิจกรรมวันนี้!',
+                            Icons.celebration_rounded,
+                            _todayEventColor,
+                            screenWidth,
+                          ),
+                          ...todaysCountdowns.map(
+                            (item) => InkWell(
+                              onTap: () => _showTaskDetailModal(
+                                context,
+                                item,
+                              ), // Pass the whole item map
+                              child: _buildCountdownCard(
+                                item['data'],
+                                screenWidth,
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (allUpcoming.isNotEmpty) ...[
+                          _buildSectionHeader(
+                            'งานที่กำลังมาถึง',
+                            Icons.hourglass_bottom,
+                            Colors.grey.shade600,
+                            screenWidth,
+                          ),
+                          ...allUpcoming.map(
+                            (item) => InkWell(
+                              onTap: () => _showTaskDetailModal(
+                                context,
+                                item,
+                              ), // Pass the whole item map
+                              child: item.containsKey('type')
+                                  ? _buildAppointmentCardReadOnly(
+                                      item['data'],
+                                      screenWidth,
+                                    ) // Appointment
+                                  : _buildCountdownCard(
+                                      item['data'],
+                                      screenWidth,
+                                    ), // Countdown
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 10), // Padding at card bottom
                       ],
-                      if (upcomingCountdowns.isNotEmpty) ...[
-                        _buildSectionHeader(
-                          'การนับถอยหลัง',
-                          Icons.hourglass_bottom_outlined,
-                          _countdownColor,
-                          screenWidth,
-                        ),
-                        ...upcomingCountdowns.map(
-                          (item) =>
-                              _buildCountdownCard(item['data'], screenWidth),
-                        ),
-                      ],
-                      // Add a small divider between groups if desired
-                      if (index < relevantGroupIds.length - 1)
-                        const Divider(height: 30, thickness: 0.5),
-                    ],
+                    ),
                   );
                 },
               );
@@ -919,24 +1391,34 @@ class _HomeScreenState extends State<HomeScreen> {
     String taskId,
     double screenWidth,
   ) {
-    /* ... unchanged ... */
     final taskTitle = task['title'] ?? 'ไม่มีชื่องาน';
     final groupId = task['groupId'] ?? '';
     final Timestamp? ts = task['taskDateTime'];
     String date = '-';
     String time = '-';
+    // Check if overdue
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    bool isOverdue = false;
     if (ts != null) {
       final dt = ts.toDate();
       date = DateFormat('d MMM y', 'th').format(dt);
       time = DateFormat('HH:mm').format(dt);
+      final dtDayOnly = DateTime(dt.year, dt.month, dt.day);
+      if (dt.isBefore(now) &&
+          (dtDayOnly.isAtSameMomentAs(today) || dtDayOnly.isBefore(today))) {
+        isOverdue = true;
+      }
     }
+    final cardColor = isOverdue ? _overdueColor : _appointmentColor;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _appointmentColor.withValues(alpha: 0.3)),
+        border: Border.all(color: cardColor.withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -950,7 +1432,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: Icon(
               Icons.radio_button_unchecked,
-              color: _appointmentColor,
+              color: cardColor,
               size: 28,
             ),
             onPressed: () {
@@ -976,7 +1458,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(
                   fontFamily: 'NotoLoopedThaiUI',
                   fontSize: 14,
-                  color: _appointmentColor,
+                  color: cardColor,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -999,7 +1481,6 @@ class _HomeScreenState extends State<HomeScreen> {
     Map<String, dynamic> task,
     double screenWidth,
   ) {
-    /* ... unchanged ... */
     final taskTitle = task['title'] ?? 'ไม่มีชื่องาน';
     final Timestamp? ts = task['taskDateTime'];
     String date = '-';
@@ -1011,7 +1492,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final assignedToList = (task['assignedTo'] as List?)?.cast<String>() ?? [];
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1051,6 +1532,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontSize: 12,
                         color: Colors.grey,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
               ],
@@ -1084,7 +1567,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildCountdownCard(Map<String, dynamic> task, double screenWidth) {
-    /* ... unchanged ... */
     final taskTitle = task['title'] ?? 'ไม่มีชื่องาน';
     final Timestamp? ts = task['taskDateTime'];
     if (ts == null) return ListTile(title: Text('$taskTitle (Missing Date)'));
@@ -1096,13 +1578,15 @@ class _HomeScreenState extends State<HomeScreen> {
     String dayStr = days < 0
         ? 'ผ่านไปแล้ว'
         : (days == 0 ? 'วันนี้!' : '$days วัน');
+    final cardColor = days == 0 ? _todayEventColor : _countdownColor;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _countdownColor, width: 2),
+        border: Border.all(color: cardColor, width: 2),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -1113,7 +1597,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Row(
         children: [
-          Icon(Icons.hourglass_bottom, color: _countdownColor),
+          Icon(
+            days == 0 ? Icons.celebration : Icons.hourglass_bottom,
+            color: cardColor,
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Text(
@@ -1130,7 +1617,7 @@ class _HomeScreenState extends State<HomeScreen> {
             style: TextStyle(
               fontFamily: 'NotoLoopedThaiUI',
               fontSize: 20,
-              color: _countdownColor,
+              color: cardColor,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -1143,19 +1630,29 @@ class _HomeScreenState extends State<HomeScreen> {
     Map<String, dynamic> itemData,
     double screenWidth,
   ) {
-    /* ... unchanged ... */
     final title = itemData['title'] ?? '-';
     final time = itemData['time'] ?? '-';
     final habitDocId = itemData['habitDocId'] ?? '';
     final groupId = itemData['groupId'] ?? '';
     final subTaskKey = itemData['subTaskKey'] ?? '';
+
+    // Check if overdue
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    bool isOverdue = false;
+    final subTaskDateTime = _parseTimeString(time, today);
+    if (subTaskDateTime != null && subTaskDateTime.isBefore(now)) {
+      isOverdue = true;
+    }
+    final cardColor = isOverdue ? _overdueColor : _habitColor;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _habitColor.withValues(alpha: 0.4)),
+        border: Border.all(color: cardColor.withValues(alpha: 0.4)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -1169,7 +1666,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: Icon(
               Icons.radio_button_unchecked,
-              color: _habitColor,
+              color: cardColor,
               size: 28,
             ),
             onPressed: () {
@@ -1203,7 +1700,7 @@ class _HomeScreenState extends State<HomeScreen> {
             style: TextStyle(
               fontFamily: 'NotoLoopedThaiUI',
               fontSize: 16,
-              color: _habitColor,
+              color: cardColor,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -1216,7 +1713,6 @@ class _HomeScreenState extends State<HomeScreen> {
     Map<String, dynamic> task,
     double screenWidth,
   ) {
-    /* ... unchanged ... */
     final title = task['title'] ?? 'กิจวัตร';
     final schedule = (task['schedule'] as Map?)?.cast<String, dynamic>() ?? {};
     final assigned = (task['assignedTo'] as List?)?.cast<String>() ?? [];
@@ -1243,7 +1739,7 @@ class _HomeScreenState extends State<HomeScreen> {
           assignSum = 'ไม่ได้มอบหมาย';
         }
         return Container(
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -1312,9 +1808,13 @@ class _HomeScreenState extends State<HomeScreen> {
     Color color,
     double screenWidth,
   ) {
-    /* ... unchanged ... */
     return Padding(
-      padding: const EdgeInsets.only(top: 16.0, bottom: 8.0, left: 4.0),
+      padding: const EdgeInsets.only(
+        top: 10.0,
+        bottom: 8.0,
+        left: 16.0,
+        right: 16.0,
+      ),
       child: Row(
         children: [
           Icon(
@@ -1347,7 +1847,7 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isCompleted = false,
   }) {
     final String type =
-        item['type'] ?? 'unknown'; // 'habit_item' or 'appointment'
+        item['type'] ?? 'unknown'; // 'habit_item', 'appointment', 'countdown'
     String title = 'ไม่มีชื่อ';
     String time = '--:--';
     List<String> assignedToIds = [];
@@ -1355,58 +1855,96 @@ class _HomeScreenState extends State<HomeScreen> {
     Color itemColor = Colors.grey;
     String? completedByName; // Store completer name
 
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    bool isOverdue = false;
+
     // Extract details based on item type
     if (type == 'habit_item') {
       title = item['title'] ?? 'กิจวัตร';
-      time = item['time'] ?? '--:--';
-      // 'assignedTo' should be in the item map if extracted correctly
+      time = item['time'] ?? '--:--'; // Today's habits just show time
       assignedToIds = (item['assignedTo'] as List?)?.cast<String>() ?? [];
-      itemIcon = Icons.calendar_month_outlined; // Use outlined version
+      itemIcon = Icons.calendar_month_outlined; // <-- Habit icon
+      // Check if overdue
+      final subTaskDateTime = _parseTimeString(time, today);
+      if (!isCompleted &&
+          subTaskDateTime != null &&
+          subTaskDateTime.isBefore(now)) {
+        isOverdue = true;
+      }
       itemColor = isCompleted
           ? _completedColor
-          : _habitColor; // Use state colors
-      // Get completer ID if stored in history (e.g., '2023-10-27_08:00_Meds_by') - Requires modification
-      // final String? completerId = item['data']?['completionHistory']?[item['subTaskKey']+'_by'];
-      // if (completerId != null) completedByName = _userNameCache[completerId];
+          : (isOverdue ? _overdueColor : _habitColor);
+
+      // Get completer ID if stored in history
+      final String? completerId =
+          item['data']?['completionHistory']?[item['subTaskKey'] + '_by'];
+      if (completerId != null) {
+        // Use cache directly, assumes _getUsernames was called
+        completedByName = _userNameCache[completerId];
+      }
     } else if (type == 'appointment') {
       final taskData = item['data'] as Map<String, dynamic>? ?? {};
       title = taskData['title'] ?? 'นัดหมาย';
       assignedToIds = (taskData['assignedTo'] as List?)?.cast<String>() ?? [];
+      itemIcon = Icons.event_available_outlined; // <-- Appointment icon
       final Timestamp? ts = taskData['taskDateTime'];
       if (ts != null) {
-        time = DateFormat('HH:mm').format(ts.toDate()); // Format time
+        final dt = ts.toDate();
+        if (!isCompleted && dt.isBefore(now)) {
+          isOverdue = true;
+        }
+
+        // --- UPDATED DATE/TIME LOGIC ---
+        final dtDayOnly = DateTime(dt.year, dt.month, dt.day);
+        if (dtDayOnly.isBefore(today)) {
+          // Overdue from a past day: Show Date + Time
+          time = DateFormat('d MMM HH:mm', 'th').format(dt);
+        } else {
+          // Today's task: Show Time only
+          time = DateFormat('HH:mm').format(dt);
+        }
+        // --- END UPDATE ---
       }
-      itemIcon = Icons.event_available_outlined; // Use outlined version
       itemColor = isCompleted
           ? _completedColor
-          : _appointmentColor; // Use state colors
-      // Get completer name if the appointment is completed
+          : (isOverdue ? _overdueColor : _appointmentColor);
+
       if (isCompleted) {
         final String? completerId = taskData['completedBy'];
         if (completerId != null) {
           completedByName = _userNameCache[completerId]; // Get from cache
         }
       }
+    } else if (type == 'countdown') {
+      final taskData = item['data'] as Map<String, dynamic>? ?? {};
+      title = taskData['title'] ?? 'นับถอยหลัง';
+      assignedToIds = []; // Countdowns aren't assigned
+      itemIcon = Icons.hourglass_bottom; // <-- Countdown icon
+      isOverdue = true; // It's in this list, so it's overdue
+      itemColor = _overdueColor;
+
+      final Timestamp? ts = taskData['taskDateTime'];
+      if (ts != null) {
+        final dt = ts.toDate();
+        // Show the date it was for
+        time = DateFormat('d MMM y', 'th').format(dt); // <-- Shows Date
+      } else {
+        time = 'ไม่มีวันที่';
+      }
     }
-    // Add cases for other types if needed (e.g., if you show countdowns here)
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8), // Smaller margin
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 10,
-      ), // Adjust padding
+      margin: const EdgeInsets.only(bottom: 8, left: 16, right: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: isCompleted
-            ? Colors.white.withValues(alpha: 0.8)
-            : Colors.white, // Slightly faded if completed
-        borderRadius: BorderRadius.circular(8), // Smaller radius
+        color: isCompleted ? Colors.white.withValues(alpha: 0.8) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: itemColor.withValues(alpha: isCompleted ? 0.5 : 0.8),
-        ), // Border matching color
+        ),
         boxShadow: [
           BoxShadow(
-            // Subtle shadow
             color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 4,
             offset: const Offset(0, 1),
@@ -1416,10 +1954,12 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         children: [
           Icon(
-            isCompleted ? Icons.check_circle : itemIcon,
+            isCompleted
+                ? Icons.check_circle
+                : (isOverdue ? Icons.warning_amber_rounded : itemIcon),
             color: itemColor,
             size: 20,
-          ), // Show check if completed
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1429,34 +1969,31 @@ class _HomeScreenState extends State<HomeScreen> {
                   title,
                   style: TextStyle(
                     fontFamily: 'NotoLoopedThaiUI',
-                    fontSize: 15, // Slightly smaller font
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    decoration: isCompleted
-                        ? TextDecoration.lineThrough
-                        : null, // Strikethrough if completed
+                    decoration: isCompleted ? TextDecoration.lineThrough : null,
                     color: isCompleted ? Colors.grey[600] : Colors.black87,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                // Show assigned user(s) or completed by user
                 FutureBuilder<Map<String, String>>(
-                  future: _getUsernames(assignedToIds), // Fetch assignee names
+                  future: _getUsernames(assignedToIds),
                   builder: (context, snapshot) {
                     String detailText;
                     if (isCompleted && completedByName != null) {
                       detailText = 'เสร็จสิ้นโดย: $completedByName';
-                    } else if (!isCompleted &&
-                        snapshot.connectionState == ConnectionState.done &&
+                    } else if (isCompleted) {
+                      detailText = 'เสร็จสิ้นแล้ว';
+                    } else if (type == 'countdown') {
+                      detailText = 'กิจกรรมผ่านไปแล้ว'; // <-- Countdown detail
+                    } else if (snapshot.connectionState ==
+                            ConnectionState.done &&
                         snapshot.hasData) {
-                      // Show assignees if not completed
                       detailText =
                           'สำหรับ: ${snapshot.data?.values.join(', ') ?? '?'}';
-                    } else if (!isCompleted) {
-                      detailText = 'สำหรับ: ...'; // Loading assignees
                     } else {
-                      detailText =
-                          'เสร็จสิ้นแล้ว'; // Fallback if completer name missing
+                      detailText = 'สำหรับ: ...';
                     }
                     return Text(
                       detailText,
@@ -1474,13 +2011,16 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          // Display Time
+          // Display Time or Date
           Text(
             time,
             style: TextStyle(
               fontFamily: 'NotoLoopedThaiUI',
-              fontSize: 15,
-              color: itemColor, // Use item color
+              // --- UPDATED FONT SIZE ---
+              // Make font smaller if it's a date (contains space)
+              fontSize: (time.contains(' ') || type == 'countdown') ? 13 : 15,
+              // --- END UPDATE ---
+              color: itemColor,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -1491,100 +2031,59 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // --- Sorting Helpers ---
   int _sortTaskItems(Map<String, dynamic> a, Map<String, dynamic> b) {
-    /* ... unchanged ... */
-    String tA = "99:99";
-    Timestamp? tsA;
-    String tB = "99:99";
-    Timestamp? tsB;
-    if (a['type'] == 'habit_item') tA = a['time'] ?? '99:99';
-    if (a['type'] == 'appointment') tsA = a['data']?['taskDateTime'];
-    if (b['type'] == 'habit_item') tB = b['time'] ?? '99:99';
-    if (b['type'] == 'appointment') tsB = b['data']?['taskDateTime'];
-    if (tsA != null && tsB != null) {
-      final dtA = tsA.toDate();
-      final dtB = tsB.toDate();
-      if (dtA.year != dtB.year) return dtA.year.compareTo(dtB.year);
-      if (dtA.month != dtB.month) return dtA.month.compareTo(dtB.month);
-      if (dtA.day != dtB.day) return dtA.day.compareTo(dtB.day);
-      return dtA.hour * 60 + dtA.minute.compareTo(dtB.hour * 60 + dtB.minute);
-    }
-    if (tsA != null) return -1;
-    if (tsB != null) return 1;
-    return tA.compareTo(tB);
+    // Get timestamp if available (appt, countdown)
+    Timestamp? tsA = a['data']?['taskDateTime'];
+    Timestamp? tsB = b['data']?['taskDateTime'];
+
+    // Get time string if available (habit)
+    String timeA = (a['type'] == 'habit_item') ? a['time'] ?? '99:99' : "00:00";
+    String timeB = (b['type'] == 'habit_item') ? b['time'] ?? '99:99' : "00:00";
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    DateTime? dateA = tsA?.toDate();
+    DateTime? dateB = tsB?.toDate();
+
+    // For habits, create a fake date for today
+    if (a['type'] == 'habit_item') dateA = _parseTimeString(timeA, today);
+    if (b['type'] == 'habit_item') dateB = _parseTimeString(timeB, today);
+
+    // Handle null dates (e.g. habits with bad time)
+    if (dateA == null && dateB == null) return 0;
+    if (dateA == null) return 1;
+    if (dateB == null) return -1;
+
+    // Primary sort: Date (oldest first)
+    return dateA.compareTo(dateB);
   }
 
   int _sortCompletedItems(Map<String, dynamic> a, Map<String, dynamic> b) {
-    /* ... unchanged ... */
+    // Try to get completion time first
     Timestamp? completedA = a['data']?['completedAt'];
     Timestamp? completedB = b['data']?['completedAt'];
+
+    // For habits, completion is just a string, so we must sort by task time
+    if (a['type'] == 'habit_item') completedA = null;
+    if (b['type'] == 'habit_item') completedB = null;
+
     if (completedA != null && completedB != null) {
-      return completedB.compareTo(completedA);
+      return completedB.compareTo(completedA); // Newest completed first
     }
     if (completedA != null) return -1;
     if (completedB != null) return 1;
-    return _sortPendingItems(a, b);
+
+    // Fallback to sorting by task time if no completion timestamp
+    return _sortTaskItems(a, b);
   }
 
   int _sortUpcomingItems(Map<String, dynamic> a, Map<String, dynamic> b) {
-    /* ... unchanged ... */
     Timestamp? tsA = a['data']?['taskDateTime'];
     Timestamp? tsB = b['data']?['taskDateTime'];
     if (tsA == null && tsB == null) return 0;
     if (tsA == null) return 1;
     if (tsB == null) return -1;
-    return tsA.compareTo(tsB);
-  }
-
-  int _sortPendingItems(Map<String, dynamic> a, Map<String, dynamic> b) {
-    String timeA = "99:99";
-    Timestamp? tsA;
-    String timeB = "99:99";
-    Timestamp? tsB;
-
-    // Extract time string for habits, timestamp for appointments
-    if (a['type'] == 'habit_item') timeA = a['time'] ?? '99:99';
-    if (a['type'] == 'appointment') tsA = a['data']?['taskDateTime'];
-    if (b['type'] == 'habit_item') timeB = b['time'] ?? '99:99';
-    if (b['type'] == 'appointment') tsB = b['data']?['taskDateTime'];
-
-    // Prioritize overdue appointments first
-    DateTime? dateA = tsA?.toDate();
-    DateTime? dateB = tsB?.toDate();
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    bool aIsPast = dateA != null && dateA.isBefore(today);
-    bool bIsPast = dateB != null && dateB.isBefore(today);
-    if (aIsPast != bIsPast) return aIsPast ? -1 : 1; // Overdue items come first
-
-    // Sort appointments primarily by timestamp (date then time)
-    if (tsA != null && tsB != null) {
-      int dateComparison = tsA.compareTo(tsB);
-      if (dateComparison != 0) return dateComparison;
-      // If same date, sort by time part (though timestamp comparison already does this)
-    }
-    // If comparing appointment and habit, appointment generally comes first unless habit time is earlier on the same day
-    if (tsA != null && dateA != null) {
-      // a is appointment
-      final dtA = dateA;
-      if (b['type'] == 'habit_item' && dtA.isAtSameMomentAs(today)) {
-        // Compare appointment time with habit time string for today
-        final timeStrA = DateFormat('HH:mm').format(dtA);
-        return timeStrA.compareTo(timeB);
-      }
-      return -1; // Appointment comes before habit on different days or future
-    }
-    if (tsB != null && dateB != null) {
-      // b is appointment
-      final dtB = dateB;
-      if (a['type'] == 'habit_item' && dtB.isAtSameMomentAs(today)) {
-        final timeStrB = DateFormat('HH:mm').format(dtB);
-        return timeA.compareTo(timeStrB);
-      }
-      return 1; // Appointment comes before habit
-    }
-
-    // If both are habits or timestamps are null, sort by time string
-    return timeA.compareTo(timeB);
+    return tsA.compareTo(tsB); // Earliest upcoming first
   }
 
   // --- Functions for Completing Tasks ---
@@ -1593,7 +2092,6 @@ class _HomeScreenState extends State<HomeScreen> {
     String groupId,
     String subTaskKey,
   ) async {
-    /* ... unchanged ... */
     if (groupId.isEmpty) {
       _showError("เกิดข้อผิดพลาด: ไม่พบรหัสกลุ่มสำหรับกิจวัตรนี้");
       return;
@@ -1604,7 +2102,15 @@ class _HomeScreenState extends State<HomeScreen> {
           .doc(groupId)
           .collection('tasks')
           .doc(habitDocId);
-      await taskRef.update({'completionHistory.$subTaskKey': 'completed'});
+
+      // Also store WHO completed it
+      final userId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown';
+
+      await taskRef.update({
+        'completionHistory.$subTaskKey': 'completed',
+        'completionHistory.${subTaskKey}_by': userId, // Store completer
+      });
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1629,7 +2135,6 @@ class _HomeScreenState extends State<HomeScreen> {
     String taskTitle,
     String time,
   ) {
-    /* ... unchanged ... */
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -1680,7 +2185,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _completeTask(String taskId, String groupId) async {
-    /* ... unchanged ... */
     if (groupId.isEmpty) {
       _showError("เกิดข้อผิดพลาด: ไม่พบรหัสกลุ่ม");
       return;
@@ -1719,7 +2223,6 @@ class _HomeScreenState extends State<HomeScreen> {
     String groupId,
     String taskTitle,
   ) {
-    /* ... unchanged ... */
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -1771,13 +2274,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // --- Empty State Widget ---
   Widget _buildEmptyTaskList(double screenWidth) {
-    /* ... unchanged ... */
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.check_circle, size: 80, color: const Color(0xFF7ED6A8)),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           Text(
             'ยอดเยี่ยม!',
             style: TextStyle(
@@ -1800,6 +2302,351 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Clears all old notifications and schedules new ones for the Care Receiver.
+  Future<void> _scheduleReceiverNotifications(
+    List<DocumentSnapshot> taskDocs,
+    String currentUserId,
+  ) async {
+    // 1. Clear all previously scheduled notifications to prevent duplicates
+    await _notificationService.cancelAllNotifications();
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final todayWeekday = today.weekday;
+    final todayKey = DateFormat('yyyy-MM-dd').format(today);
+    int notificationId = 0; // Unique ID for each notification
+
+    for (var doc in taskDocs) {
+      final task = doc.data() as Map<String, dynamic>?;
+      if (task == null) continue;
+
+      final groupId = task['groupId'] ?? '';
+      final assignedTo = (task['assignedTo'] as List?)?.cast<String>() ?? [];
+      final type = task['taskType'] ?? '';
+
+      // Only schedule for tasks assigned to this user
+      if (!assignedTo.contains(currentUserId)) continue;
+
+      if (type == 'appointment') {
+        final Timestamp? ts = task['taskDateTime'];
+        if (ts == null) continue;
+
+        final DateTime taskDate = ts.toDate();
+        final String title = task['title'] ?? 'นัดหมาย';
+        final String groupName = _groupNameCache[groupId] ?? '...';
+        final String payload = "appointment/$groupId/${doc.id}";
+
+        // Schedule "At-Due-Time" notification
+        if (taskDate.isAfter(now)) {
+          notificationId++;
+          _notificationService.scheduleTaskNotification(
+            id: notificationId,
+            title: 'ถึงเวลา: $title',
+            body: 'จากกลุ่ม: $groupName',
+            scheduledTime: taskDate,
+            payload: payload,
+            withActions: true, // <-- Adds "Completed" button
+          );
+        }
+
+        // Schedule "1-Hour-Before" notification
+        final DateTime oneHourBefore = taskDate.subtract(
+          const Duration(hours: 1),
+        );
+        if (oneHourBefore.isAfter(now)) {
+          notificationId++;
+          _notificationService.scheduleTaskNotification(
+            id: notificationId,
+            title: 'อีก 1 ชั่วโมง: $title',
+            body: 'จากกลุ่ม: $groupName',
+            scheduledTime: oneHourBefore,
+            payload: payload,
+            withActions: false,
+          );
+        }
+      } else if (type == 'habit_schedule') {
+        final schedule =
+            (task['schedule'] as Map?)?.cast<String, List<dynamic>>() ?? {};
+        final tasksForTodayDynamic = schedule[todayWeekday.toString()];
+
+        if (tasksForTodayDynamic != null && tasksForTodayDynamic.isNotEmpty) {
+          final completionHistory =
+              (task['completionHistory'] as Map?)?.cast<String, String>() ?? {};
+
+          for (var subTask in tasksForTodayDynamic) {
+            final subTaskTimeStr = subTask['time'] ?? '';
+            final subTaskTitle = subTask['title'] ?? '';
+            final subTaskKey = '${todayKey}_${subTaskTimeStr}_$subTaskTitle';
+            final isCompleted = completionHistory[subTaskKey] == 'completed';
+
+            // Don't schedule if already completed
+            if (isCompleted) continue;
+
+            final DateTime? taskDate = _parseTimeString(subTaskTimeStr, today);
+            if (taskDate == null) continue;
+
+            final String groupName = _groupNameCache[groupId] ?? '...';
+            // Payload needs subTaskKey to complete the right habit item
+            final String payload = "habit/$groupId/${doc.id}/$subTaskKey";
+
+            // Schedule "At-Due-Time" notification
+            if (taskDate.isAfter(now)) {
+              notificationId++;
+              _notificationService.scheduleTaskNotification(
+                id: notificationId,
+                title: 'ถึงเวลา: $subTaskTitle',
+                body: 'จากกลุ่ม: $groupName',
+                scheduledTime: taskDate,
+                payload: payload,
+                withActions: true, // <-- Adds "Completed" button
+              );
+            }
+
+            // Schedule "1-Hour-Before" notification
+            final DateTime oneHourBefore = taskDate.subtract(
+              const Duration(hours: 1),
+            );
+            if (oneHourBefore.isAfter(now)) {
+              notificationId++;
+              _notificationService.scheduleTaskNotification(
+                id: notificationId,
+                title: 'อีก 1 ชั่วโมง: $subTaskTitle',
+                body: 'จากกลุ่ม: $groupName',
+                scheduledTime: oneHourBefore,
+                payload: payload,
+                withActions: false,
+              );
+            }
+          }
+        }
+      }
+    }
+    print("Scheduled $notificationId local notifications.");
+  }
+
+  /// Shows a modal dialog with task details.
+  void _showTaskDetailModal(
+    BuildContext context,
+    Map<String, dynamic> itemData,
+  ) {
+    // Extract common data
+    final String type = itemData['type'] ?? 'unknown';
+    final Map<String, dynamic> taskData = itemData['data'] ?? {};
+    final String taskId =
+        itemData['id'] ?? itemData['habitDocId'] ?? 'unknown_id';
+    final String groupId =
+        itemData['groupId'] ?? taskData['groupId'] ?? 'unknown_group';
+    final String groupName = _groupNameCache[groupId] ?? 'Loading...';
+    String title = taskData['title'] ?? itemData['title'] ?? 'No Title';
+    final String description = taskData['description'] ?? '';
+    final List<String> assignedToIds =
+        (taskData['assignedTo'] as List?)?.cast<String>() ??
+        (itemData['assignedTo'] as List?)?.cast<String>() ??
+        [];
+    final bool isCompleted =
+        itemData['isCompleted'] ?? (taskData['status'] == 'completed');
+    final Timestamp? completedAt = taskData['completedAt'];
+    // Get subTaskKey safely
+    final String? subTaskKey = itemData['subTaskKey'];
+    // Get completion history map safely
+    final Map<String, dynamic>? completionHistory =
+        taskData['completionHistory'] as Map<String, dynamic>?;
+
+    // Determine completedByUid
+    String? completedByUid = taskData['completedBy']; // Check appointment first
+    if (completedByUid == null &&
+        subTaskKey != null &&
+        completionHistory != null) {
+      // If not from appointment, and we have a subTaskKey and history, look it up
+      completedByUid =
+          completionHistory['${subTaskKey}_by']; // Use interpolation
+    }
+
+    IconData typeIcon = Icons.task;
+    Color typeColor = Colors.grey;
+    String typeText = "Task";
+    String dateTimeText = "";
+
+    // Type-specific details
+    if (type == 'appointment') {
+      typeIcon = Icons.event_available_outlined;
+      typeColor = _appointmentColor;
+      typeText = "Appointment";
+      title = taskData['title'] ?? 'Appointment'; // Ensure title is correct
+      final Timestamp? ts = taskData['taskDateTime'];
+      if (ts != null) {
+        dateTimeText =
+            "Due: ${DateFormat('d MMM y HH:mm', 'th').format(ts.toDate())}";
+      }
+    } else if (type == 'habit_item') {
+      typeIcon = Icons.calendar_month_outlined;
+      typeColor = _habitColor;
+      typeText = "Habit Task";
+      title = itemData['title'] ?? 'Habit Task'; // Use item title
+      dateTimeText = "Time: ${itemData['time'] ?? '--:--'} (Today)";
+    } else if (type == 'countdown') {
+      typeIcon = Icons.hourglass_bottom;
+      typeColor = _countdownColor;
+      typeText = "Countdown";
+      title = taskData['title'] ?? 'Countdown'; // Ensure title is correct
+      final Timestamp? ts = taskData['taskDateTime'];
+      if (ts != null) {
+        dateTimeText =
+            "Target Date: ${DateFormat('d MMM y', 'th').format(ts.toDate())}";
+      }
+    } else if (type == 'habit_schedule') {
+      // For the summary card
+      typeIcon = Icons.calendar_month;
+      typeColor = _habitColor;
+      typeText = "Habit Schedule";
+      title = taskData['title'] ?? 'Habit Schedule';
+      // Schedule summary (simple version)
+      final schedule =
+          (taskData['schedule'] as Map?)?.cast<String, dynamic>() ?? {};
+      List<String> days = [];
+      int totalItems = 0;
+      for (int i = 1; i <= 7; i++) {
+        final dayTasks = (schedule[i.toString()] as List?);
+        if (dayTasks?.isNotEmpty ?? false) {
+          days.add(_dayLabelsShort[i - 1]);
+          totalItems += dayTasks!.length;
+        }
+      }
+      dateTimeText = days.isNotEmpty
+          ? 'Repeats: ${days.join(", ")} ($totalItems items total)'
+          : 'No schedule set';
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          titlePadding: const EdgeInsets.all(20).copyWith(bottom: 0),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 10,
+          ),
+          actionsPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 10,
+          ),
+          title: Row(
+            children: [
+              Icon(typeIcon, color: typeColor, size: 28),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: typeColor,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            // Allow scrolling for long details
+            child: ListBody(
+              children: <Widget>[
+                Divider(color: typeColor.withOpacity(0.3)),
+                if (description.isNotEmpty) ...[
+                  const Text(
+                    'Description:',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  Text(description),
+                  const SizedBox(height: 10),
+                ],
+                if (dateTimeText.isNotEmpty) ...[
+                  Text(
+                    dateTimeText,
+                    style: const TextStyle(color: Colors.black54),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                Text(
+                  'Group: $groupName',
+                  style: const TextStyle(color: Colors.black54),
+                ),
+                const SizedBox(height: 10),
+
+                // Assigned To / Completed By section
+                if (assignedToIds.isNotEmpty || completedByUid != null)
+                  FutureBuilder<Map<String, String>>(
+                    future: _getUsernames([
+                      ...assignedToIds,
+                      if (completedByUid != null) completedByUid,
+                    ]),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Text('Loading details...');
+                      }
+                      final names = snapshot.data ?? {};
+                      final assignedNames = assignedToIds
+                          .map((id) => names[id] ?? 'Unknown')
+                          .join(', ');
+                      final completerName = names[completedByUid];
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (assignedToIds.isNotEmpty &&
+                              type != 'habit_schedule')
+                            Text('Assigned to: $assignedNames'),
+                          if (isCompleted && completerName != null) ...[
+                            const SizedBox(height: 5),
+                            Text(
+                              'Completed by: $completerName' +
+                                  (completedAt != null
+                                      ? ' on ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}'
+                                      : ''),
+                              style: TextStyle(
+                                color: _completedColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ] else if (isCompleted) ...[
+                            const SizedBox(height: 5),
+                            Text(
+                              'Completed' +
+                                  (completedAt != null
+                                      ? ' on ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}'
+                                      : ''),
+                              style: TextStyle(
+                                color: _completedColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text(
+                'Close',
+                style: TextStyle(fontFamily: 'NotoLoopedThaiUI'),
+              ),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 } // End of _HomeScreenState

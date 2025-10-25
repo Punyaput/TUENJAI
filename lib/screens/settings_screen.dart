@@ -108,7 +108,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // --- NEW: Delete Account Confirmation Dialog ---
+  // --- Delete Account Confirmation Dialog ---
   void _showDeleteAccountDialog() {
     showDialog(
       context: context,
@@ -182,9 +182,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     });
   }
-  // --- END NEW DIALOG ---
 
-  // --- NEW: Handle Account Deletion Logic ---
+  // --- Handle Account Deletion Logic ---
   Future<void> _handleAccountDeletion() async {
     if (!mounted) return; // Check if widget is still active
     setState(() {
@@ -285,7 +284,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: const BottomBackgroundCircles(),
             ),
 
-            // --- RESTRUCTURED CONTENT ---
             // Main Column takes all available vertical space
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -386,10 +384,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
-                // --- NO bottom padding needed here ---
               ],
             ),
-            // --- END RESTRUCTURE ---
           ],
         ),
       ),
@@ -412,7 +408,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // --- UPDATED: Use consistent red colors ---
   Widget _buildSettingsItem({
     required IconData icon,
     required String title,

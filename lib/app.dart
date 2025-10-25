@@ -1,36 +1,12 @@
-// lib/main.dart
+// lib/app.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // <-- Import Auth
-import 'package:intl/date_symbol_data_local.dart';
-// Import your screens
+import 'package:firebase_auth/firebase_auth.dart';
+
+// Import your screens needed by AuthWrapper
 import 'screens/initial_screen.dart';
 import 'screens/home_screen.dart';
-
-// Use this if you have firebase_options.dart from flutterfire configure
-// import 'firebase_options.dart';
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize Firebase (Choose ONE method)
-  await Firebase.initializeApp(); // Native method
-  // OR:
-  // await Firebase.initializeApp(
-  //   options: DefaultFirebaseOptions.currentPlatform, // FlutterFire CLI method
-  // );
-
-  await initializeDateFormatting('th', null);
-
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
-
-  runApp(const TuenJaiApp());
-}
+// Add any other imports TuenJaiApp might need (like themes)
 
 class TuenJaiApp extends StatelessWidget {
   const TuenJaiApp({super.key});
@@ -38,7 +14,7 @@ class TuenJaiApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TuenJai',
+      title: 'TuenJai', // Consider adding "(Dev)" here based on flavor later
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E88F3)),
         scaffoldBackgroundColor: const Color(0xFFF9FAFB),
@@ -57,38 +33,31 @@ class TuenJaiApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      // --- Use AuthWrapper instead of SplashScreen directly ---
       home: const AuthWrapper(),
-      debugShowCheckedModeBanner: false,
+      debugShowCheckedModeBanner:
+          false, // Keep false for prod, maybe true for dev
     );
   }
 }
 
-// --- NEW Wrapper Widget ---
+// AuthWrapper remains the same
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // StreamBuilder listens to authentication state changes
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // 1. Check connection state
         if (snapshot.connectionState == ConnectionState.waiting) {
-          // Show a loading indicator while checking auth state
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
-
-        // 2. Check if user data exists in the snapshot
         if (snapshot.hasData && snapshot.data != null) {
-          // User is logged IN - Go to HomeScreen
-          return const HomeScreen();
+          return const HomeScreen(); // User logged IN
         } else {
-          // User is logged OUT - Go to InitialScreen (which leads to LoginScreen)
-          return const InitialScreen();
+          return const InitialScreen(); // User logged OUT
         }
       },
     );
