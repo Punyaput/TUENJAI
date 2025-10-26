@@ -6,15 +6,15 @@ import 'package:flutter/services.dart';
 class OtpInputField extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
-  final Function(String) onChanged;
-  final VoidCallback onBackspace;
+  final Function(String)
+  onChanged; // This is called ONLY when a digit is entered
+  // Removed index and allFocusNodes as they are not needed here anymore
 
   const OtpInputField({
     super.key,
     required this.controller,
     required this.focusNode,
     required this.onChanged,
-    required this.onBackspace,
   });
 
   @override
@@ -27,7 +27,7 @@ class OtpInputField extends StatelessWidget {
       height: fieldSize + 10,
       decoration: BoxDecoration(
         border: Border.all(
-          color: controller.text.isNotEmpty
+          color: focusNode.hasFocus || controller.text.isNotEmpty
               ? const Color(0xFF2E88F3)
               : const Color(0xFFD1D5DB),
           width: 2,
@@ -41,6 +41,11 @@ class OtpInputField extends StatelessWidget {
         textAlign: TextAlign.center,
         keyboardType: TextInputType.number,
         maxLength: 1,
+        // Automatically select text when focused for easy overwrite
+        onTap: () => controller.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: controller.text.length,
+        ),
         style: TextStyle(
           fontSize: screenWidth * 0.055,
           fontWeight: FontWeight.bold,
@@ -53,15 +58,11 @@ class OtpInputField extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
         ),
         onChanged: (value) {
-          if (value.isEmpty) {
-            onBackspace();
-          } else {
+          // ONLY call the parent onChanged when a digit is entered
+          if (value.isNotEmpty) {
             onChanged(value);
           }
-        },
-        onTap: () {
-          // Clear the field when tapped to allow re-entry
-          controller.clear();
+          // Backspace logic is handled by RawKeyboardListener in the parent screen
         },
       ),
     );

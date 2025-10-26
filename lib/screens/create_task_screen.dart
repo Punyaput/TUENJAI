@@ -46,6 +46,16 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   final Map<String, bool> _selectedReceivers =
       {}; // Tracks assignment selection
 
+  final Color _appointmentColor = const Color(0xFF2E88F3); // Blue
+  final Color _countdownColor = const Color(0xFF7ED6A8); // Green
+  final Color _habitColor = Colors.purple.shade300; // Purple
+
+  final Map<TaskType, String> _taskTypeNames = {
+    TaskType.appointment: "นัดหมาย",
+    TaskType.countdown: "นับถอยหลัง",
+    TaskType.habit: "กิจวัตร",
+  };
+
   @override
   void initState() {
     super.initState();
@@ -154,6 +164,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         receivers.add({
           'uid': doc.id,
           'username': doc.data()['username'] ?? 'No Name',
+          'profilePicUrl': doc.data()['profilePicUrl'],
         });
         // Initialize selection state respecting pre-population
         _selectedReceivers.putIfAbsent(doc.id, () => false);
@@ -230,15 +241,31 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       _showError("กรุณาใส่ชื่อ");
       return;
     }
-    final assignedTo = _selectedReceivers.entries
-        .where((entry) => entry.value)
-        .map((entry) => entry.key)
-        .toList();
-    if ((_selectedType == TaskType.appointment ||
-            _selectedType == TaskType.habit) &&
-        assignedTo.isEmpty) {
-      _showError("กรุณาเลือกผู้รับการดูแลอย่างน้อย 1 คน");
-      return;
+    List<String> assignedTo = []; // Start with an empty list
+    if (_selectedType == TaskType.appointment ||
+        _selectedType == TaskType.habit) {
+      // Get IDs of users currently available in the picker
+      final availableReceiverIds = _careReceivers
+          .map((r) => r['uid'] as String)
+          .toSet();
+
+      // Build the list ONLY from available AND selected users
+      assignedTo = _selectedReceivers.entries
+          .where(
+            (entry) =>
+                entry.value && // Is the checkbox selected?
+                availableReceiverIds.contains(
+                  entry.key,
+                ), // Is this user still a valid, available receiver?
+          )
+          .map((entry) => entry.key)
+          .toList();
+
+      // Re-validate: Still need at least one valid assignee if required by type
+      if (assignedTo.isEmpty) {
+        _showError("กรุณาเลือกผู้รับการดูแลอย่างน้อย 1 คน");
+        return;
+      }
     }
 
     Map<String, dynamic> taskSpecificData = {};
@@ -496,7 +523,48 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                                   ),
                                 ),
                               ),
-                              SizedBox(height: screenWidth * 0.05),
+
+                              SizedBox(height: screenWidth * 0.01),
+
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(
+                                    20,
+                                  ), // Rounded corners
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.05,
+                                      ),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  _taskTypeNames[_selectedType] ??
+                                      '', // Get Thai name based on selection
+                                  style: TextStyle(
+                                    fontFamily: 'NotoLoopedThaiUI',
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    // Set color based on selection
+                                    color: _selectedType == TaskType.appointment
+                                        ? _appointmentColor
+                                        : _selectedType == TaskType.countdown
+                                        ? _countdownColor
+                                        : _habitColor,
+                                  ),
+                                ),
+                              ),
+
+                              SizedBox(height: screenWidth * 0.02),
+
                               _buildForm(screenWidth), // Main form section
                               // Member Picker (shown for appointments and habits)
                               if (_selectedType == TaskType.appointment ||
@@ -512,7 +580,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                           Padding(
                             padding: EdgeInsets.only(
                               top: screenWidth * 0.08, // Space above button
-                              bottom: screenWidth * 0.1, // Bottom padding
+                              bottom: screenWidth * 0.3, // Bottom padding
                             ),
                             child: _isSaving
                                 ? const CircularProgressIndicator()
@@ -841,20 +909,57 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               children: _careReceivers.map((receiver) {
                 final uid = receiver['uid'];
                 final username = receiver['username'];
+                final profilePicUrl =
+                    receiver['profilePicUrl'] as String?; // Get URL
+
                 return CheckboxListTile(
-                  title: Text(
-                    username,
-                    style: const TextStyle(fontFamily: 'NotoLoopedThaiUI'),
-                  ),
+                  // Use dense: true for slightly less vertical space
+                  dense: true,
+                  // controlAffinity: ListTileControlAffinity.leading, // Already set
+                  contentPadding: EdgeInsets.zero, // Keep zero padding
+                  activeColor: _appointmentColor, // Use theme color
                   value: _selectedReceivers[uid] ?? false,
                   onChanged: (bool? value) {
                     setState(() {
                       _selectedReceivers[uid] = value ?? false;
                     });
                   },
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  activeColor: const Color(0xFF2E88F3),
+                  // Use the title slot for Row containing Avatar and Name
+                  title: Row(
+                    children: [
+                      // Profile Picture Avatar
+                      CircleAvatar(
+                        radius: 18, // Adjust size as needed
+                        backgroundColor:
+                            Colors.grey.shade200, // Background for fallback
+                        backgroundImage:
+                            (profilePicUrl != null && profilePicUrl.isNotEmpty)
+                            ? NetworkImage(profilePicUrl) // Display image
+                            : null, // No image if URL is null/empty
+                        child: (profilePicUrl == null || profilePicUrl.isEmpty)
+                            ? Icon(
+                                // Fallback icon
+                                Icons.person_outline,
+                                size: 18,
+                                color: Colors.grey.shade500,
+                              )
+                            : null, // No child if image is loading/loaded
+                      ),
+                      const SizedBox(
+                        width: 12,
+                      ), // Spacing between avatar and name
+                      // Username Text (Expanded to prevent overflow)
+                      Expanded(
+                        child: Text(
+                          username,
+                          style: const TextStyle(
+                            fontFamily: 'NotoLoopedThaiUI',
+                          ),
+                          overflow: TextOverflow.ellipsis, // Handle long names
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               }).toList(),
             ),

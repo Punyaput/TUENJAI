@@ -220,7 +220,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
-      resizeToAvoidBottomInset: true, // Use true with SingleChildScrollView
+      resizeToAvoidBottomInset: false, // Use true with SingleChildScrollView
       body: SafeArea(
         child: Stack(
           children: [

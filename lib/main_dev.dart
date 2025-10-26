@@ -23,7 +23,7 @@ void main() async {
   try {
     await NotificationService().init();
   } catch (e) {
-    print("Error initializing NotificationService (DEV): $e");
+    // print("Error initializing NotificationService (DEV): $e");
   }
 
   // Initialize timezone data

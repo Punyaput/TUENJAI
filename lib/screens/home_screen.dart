@@ -112,6 +112,26 @@ class _HomeScreenState extends State<HomeScreen> {
               .collection('users')
               .where(FieldPath.documentId, whereIn: batchIds)
               .get();
+          // Create a map of found user data
+          final Map<String, Map<String, dynamic>> foundUsers = {
+            for (var doc in querySnapshot.docs) doc.id: doc.data(),
+          };
+
+          // Iterate through the IDs we tried to fetch
+          for (String idInBatch in batchIds) {
+            if (foundUsers.containsKey(idInBatch)) {
+              // User exists
+              final data = foundUsers[idInBatch]!;
+              final name = data['username'] ?? 'Unknown User';
+              _userNameCache[idInBatch] = name;
+              names[idInBatch] = name;
+            } else {
+              // User does not exist (deleted)
+              const name = 'ผู้ใช้ที่ถูกลบ'; // Thai for "Deleted User"
+              _userNameCache[idInBatch] = name;
+              names[idInBatch] = name;
+            }
+          }
           for (var doc in querySnapshot.docs) {
             final name = doc.data()['username'] ?? 'ไม่ทราบชื่อ';
             _userNameCache[doc.id] = name;
@@ -210,12 +230,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (index == 0) {
       Navigator.pushReplacement(
         context,
-        FadeRoute(child: const GroupsScreen()), // <-- THAT'S IT!
+        FadeRoute(child: const GroupsScreen()),
       );
     } else if (index == 2) {
       Navigator.pushReplacement(
         context,
-        FadeRoute(child: const SettingsScreen()), // <-- THAT'S IT!
+        FadeRoute(child: const SettingsScreen()),
       );
     }
   }
@@ -262,9 +282,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     SizedBox(height: screenHeight * 0.02),
                     _buildHeader(screenWidth),
-                    SizedBox(height: screenHeight * 0.02),
+                    SizedBox(height: screenHeight * 0.01),
                     _buildTodayLabel(thaiWeekdayName, today, screenWidth),
-                    SizedBox(height: screenHeight * 0.03),
+                    SizedBox(height: screenHeight * 0.02),
                     if (_userRole == 'caretaker')
                       _buildCaretakerContent(screenWidth)
                     else if (_userRole == 'carereceiver')
@@ -294,7 +314,7 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'สวัสดี',
+              'สวัสดีจ้า',
               style: TextStyle(
                 fontFamily: 'NotoLoopedThaiUI',
                 fontSize: screenWidth * 0.06,
@@ -337,20 +357,53 @@ class _HomeScreenState extends State<HomeScreen> {
     DateTime today,
     double screenWidth,
   ) {
-    // Format the date part: e.g., "25 ตุลาคม 2025"
+    // Format the date part: e.g., "26 ตุลาคม 2025"
     final formattedDate = DateFormat('d MMMM y', 'th').format(today);
-    // Combine strings: "วันนี้ วันเสาร์ที่ 25 ตุลาคม 2025"
-    final fullDateString = 'วันนี้ $thaiWeekdayName\ที่ $formattedDate';
-    // Get the color using the Thai weekday name
-    final Color labelColor = dayColors[thaiWeekdayName] ?? Colors.black;
+    // Get the color for the capsule background
+    final Color dayColor =
+        dayColors[thaiWeekdayName] ?? Colors.grey; // Fallback color
+    // Combine "Today" and the day name
+    final String capsuleText =
+        'วันนี้ $thaiWeekdayName'; // e.g., "วันนี้ วันอาทิตย์"
 
-    return Text(
-      fullDateString,
-      style: TextStyle(
-        fontFamily: 'NotoLoopedThaiUI',
-        fontSize: screenWidth * 0.055, // Adjusted size slightly
-        fontWeight: FontWeight.bold,
-        color: labelColor, // Apply color to the whole string
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Day name capsule (now includes "วันนี้")
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12.0,
+              vertical: 1.0,
+            ), // Padding inside capsule
+            decoration: BoxDecoration(
+              color: dayColor, // Use the day's specific color
+              borderRadius: BorderRadius.circular(
+                20.0,
+              ), // Make it capsule-shaped
+            ),
+            child: Text(
+              capsuleText, // Use the combined string
+              style: TextStyle(
+                fontFamily: 'NotoLoopedThaiUI',
+                fontSize: screenWidth * 0.05, // Adjust size if needed
+                fontWeight: FontWeight.bold,
+                color: Colors.white, // White text inside capsule
+              ),
+            ),
+          ),
+          // Date part (follows the capsule)
+          Text(
+            ' $formattedDate', // e.g., " 26 ตุลาคม 2025" (note the leading space)
+            style: TextStyle(
+              fontFamily: 'NotoLoopedThaiUI',
+              fontSize: screenWidth * 0.055,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[700], // Default text color for the date part
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -652,7 +705,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   // --- UI CHANGE: Wrap sections in a Card ---
                   return Card(
                     elevation: 2.0,
-                    shadowColor: Colors.black.withOpacity(0.08),
+                    shadowColor: Colors.black.withValues(alpha: 0.08),
                     margin: const EdgeInsets.only(bottom: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -682,7 +735,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         groupImageUrl.isEmpty)
                                     ? Icon(
                                         // Fallback icon
-                                        Icons.group,
+                                        Icons.home,
                                         size: screenWidth * 0.05,
                                         color: Colors.grey.shade500,
                                       )
@@ -817,7 +870,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                         if (upcoming.isNotEmpty) ...[
                           _buildSectionHeader(
-                            'งานที่กำลังมาถึง',
+                            'สิ่งที่กำลังจะมาถึง',
                             Icons.hourglass_bottom,
                             Colors.grey.shade600,
                             screenWidth,
@@ -1061,11 +1114,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     'id': doc.id,
                     'data': task,
                     'type': 'countdown',
-                  }; // <-- Add type
+                  };
                   if (days == 0) {
-                    // ... (add to 'todays_countdowns')
+                    groupedCategorizedTasks[groupId]!['todays_countdowns']!.add(
+                      itemData,
+                    );
                   } else if (days > 0) {
-                    // ... (add to 'upcoming_countdowns')
+                    groupedCategorizedTasks[groupId]!['upcoming_countdowns']!
+                        .add(itemData);
                   } else if (days < 0) {
                     groupedCategorizedTasks[groupId]!['overdue_countdowns']!
                         .add(itemData);
@@ -1155,7 +1211,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   final overdueHabits = categories['overdue_habits']!;
                   final overdueAppointments =
                       categories['overdue_appointments']!;
-                  final overdueCountdowns = categories['overdue_countdowns']!;
+                  // final overdueCountdowns = categories['overdue_countdowns']!;
                   final completedToday = categories['completed_today']!;
                   final todaysCountdowns = categories['todays_countdowns']!;
                   final upcomingAppointments =
@@ -1174,7 +1230,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   return Card(
                     elevation: 2.0,
-                    shadowColor: Colors.black.withOpacity(0.08),
+                    shadowColor: Colors.black.withValues(alpha: 0.08),
                     margin: const EdgeInsets.only(bottom: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -1348,7 +1404,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                         if (allUpcoming.isNotEmpty) ...[
                           _buildSectionHeader(
-                            'งานที่กำลังมาถึง',
+                            'สิ่งที่กำลังจะมาถึง',
                             Icons.hourglass_bottom,
                             Colors.grey.shade600,
                             screenWidth,
@@ -1359,7 +1415,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 context,
                                 item,
                               ), // Pass the whole item map
-                              child: item.containsKey('type')
+                              child:
+                                  (item.containsKey('type') &&
+                                      item['type'] == 'appointment')
                                   ? _buildAppointmentCardReadOnly(
                                       item['data'],
                                       screenWidth,
@@ -1577,7 +1635,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final days = target.difference(today).inDays;
     String dayStr = days < 0
         ? 'ผ่านไปแล้ว'
-        : (days == 0 ? 'วันนี้!' : '$days วัน');
+        : (days == 0 ? 'วันนี้!' : 'อีก $days วัน');
     final cardColor = days == 0 ? _todayEventColor : _countdownColor;
 
     return Container(
@@ -2424,7 +2482,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
     }
-    print("Scheduled $notificationId local notifications.");
+    // print("Scheduled $notificationId local notifications.");
   }
 
   /// Shows a modal dialog with task details.
@@ -2435,8 +2493,8 @@ class _HomeScreenState extends State<HomeScreen> {
     // Extract common data
     final String type = itemData['type'] ?? 'unknown';
     final Map<String, dynamic> taskData = itemData['data'] ?? {};
-    final String taskId =
-        itemData['id'] ?? itemData['habitDocId'] ?? 'unknown_id';
+    // final String taskId =
+    //     itemData['id'] ?? itemData['habitDocId'] ?? 'unknown_id';
     final String groupId =
         itemData['groupId'] ?? taskData['groupId'] ?? 'unknown_group';
     final String groupName = _groupNameCache[groupId] ?? 'Loading...';
@@ -2557,7 +2615,7 @@ class _HomeScreenState extends State<HomeScreen> {
             // Allow scrolling for long details
             child: ListBody(
               children: <Widget>[
-                Divider(color: typeColor.withOpacity(0.3)),
+                Divider(color: typeColor.withValues(alpha: 0.3)),
                 if (description.isNotEmpty) ...[
                   const Text(
                     'Description:',
@@ -2605,10 +2663,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (isCompleted && completerName != null) ...[
                             const SizedBox(height: 5),
                             Text(
-                              'Completed by: $completerName' +
-                                  (completedAt != null
-                                      ? ' on ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}'
-                                      : ''),
+                              'Completed by: $completerName${completedAt != null ? ' on ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}' : ''}',
                               style: TextStyle(
                                 color: _completedColor,
                                 fontWeight: FontWeight.w600,
@@ -2617,10 +2672,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ] else if (isCompleted) ...[
                             const SizedBox(height: 5),
                             Text(
-                              'Completed' +
-                                  (completedAt != null
-                                      ? ' on ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}'
-                                      : ''),
+                              'Completed${completedAt != null ? ' on ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}' : ''}',
                               style: TextStyle(
                                 color: _completedColor,
                                 fontWeight: FontWeight.w600,

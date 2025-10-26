@@ -194,20 +194,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 children: [
                   const SizedBox(height: 10), // Reduced top padding
                   // --- UI CHANGE: Wrap list in a Card ---
-                  Expanded(
-                    child: Card(
-                      elevation: 2.0,
-                      shadowColor: Colors.black.withOpacity(0.08),
-                      // Add margin for FAB shadow
-                      margin: const EdgeInsets.only(bottom: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      color: Colors.white,
-                      clipBehavior: Clip.antiAlias,
-                      child: _buildTasksListStream(screenWidth),
-                    ),
-                  ),
+                  Expanded(child: _buildTasksListStream(screenWidth)),
                   // --- End UI Change ---
                 ],
               ),
@@ -439,111 +426,199 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
         // --- Build Sectioned ListView ---
         return ListView(
-          // Padding for FAB and card content
+          // Padding for FAB
           padding: const EdgeInsets.only(bottom: 120, top: 8),
           children: [
             // --- Pending Section ---
-            if (pendingToday.isNotEmpty) ...[
-              _buildSectionHeader(
-                'วันนี้ (รอดำเนินการ)',
-                Icons.radio_button_unchecked,
-                _pendingColor,
-                screenWidth,
+            if (pendingToday.isNotEmpty)
+              Card(
+                // Wrap section in Card
+                elevation: 1.5,
+                shadowColor: Colors.black.withValues(alpha: 0.06),
+                margin: const EdgeInsets.only(bottom: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                color: Colors.white,
+                child: Column(
+                  children: [
+                    _buildSectionHeader(
+                      'วันนี้ (รอดำเนินการ)',
+                      Icons.radio_button_unchecked,
+                      _pendingColor,
+                      screenWidth,
+                    ),
+                    ...pendingToday.map(
+                      (item) => _buildDashboardItemCardWithControls(
+                        item,
+                        screenWidth,
+                      ),
+                    ),
+                    const SizedBox(height: 8), // Padding inside card bottom
+                  ],
+                ),
               ),
-              ...pendingToday.map(
-                (item) =>
-                    _buildDashboardItemCardWithControls(item, screenWidth),
-              ),
-            ],
 
             // --- Overdue Section ---
-            if (overdueToday.isNotEmpty) ...[
-              _buildSectionHeader(
-                'ผ่านไปแล้ว',
-                Icons.warning_amber_rounded,
-                _overdueColor,
-                screenWidth,
+            if (overdueToday.isNotEmpty)
+              Card(
+                // Wrap section in Card
+                elevation: 1.5,
+                shadowColor: Colors.black.withValues(alpha: 0.06),
+                margin: const EdgeInsets.only(bottom: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                color: Colors.white,
+                child: Column(
+                  children: [
+                    _buildSectionHeader(
+                      'ผ่านไปแล้ว', // Updated name
+                      Icons.warning_amber_rounded,
+                      _overdueColor,
+                      screenWidth,
+                    ),
+                    ...overdueToday.map(
+                      (item) => _buildDashboardItemCardWithControls(
+                        item,
+                        screenWidth,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
               ),
-              ...overdueToday.map(
-                (item) =>
-                    _buildDashboardItemCardWithControls(item, screenWidth),
-              ),
-            ],
 
             // --- Completed Section ---
-            if (completedToday.isNotEmpty) ...[
-              _buildSectionHeader(
-                'วันนี้ (เสร็จสิ้น)',
-                Icons.check_circle,
-                _completedColor,
-                screenWidth,
-              ),
-              ...completedToday.map(
-                (item) => _buildDashboardItemCardWithControls(
-                  item,
-                  screenWidth,
-                  isCompleted: true,
+            if (completedToday.isNotEmpty)
+              Card(
+                // Wrap section in Card
+                elevation: 1.5,
+                shadowColor: Colors.black.withValues(alpha: 0.06),
+                margin: const EdgeInsets.only(bottom: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                color: Colors.white,
+                child: Column(
+                  children: [
+                    _buildSectionHeader(
+                      'วันนี้ (เสร็จสิ้น)',
+                      Icons.check_circle,
+                      _completedColor,
+                      screenWidth,
+                    ),
+                    ...completedToday.map(
+                      (item) => _buildDashboardItemCardWithControls(
+                        item,
+                        screenWidth,
+                        isCompleted: true,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                 ),
               ),
-            ],
 
             // --- Today's Countdowns Section ---
-            if (todaysCountdowns.isNotEmpty) ...[
-              _buildSectionHeader(
-                'กิจกรรมวันนี้!',
-                Icons.celebration_rounded,
-                _todayEventColor,
-                screenWidth,
-              ),
-              ...todaysCountdowns.map(
-                (item) => _buildCountdownCardWithControls(
-                  item['data'],
-                  item['id'],
-                  screenWidth,
+            if (todaysCountdowns.isNotEmpty)
+              Card(
+                // Wrap section in Card
+                elevation: 1.5,
+                shadowColor: Colors.black.withValues(alpha: 0.06),
+                margin: const EdgeInsets.only(bottom: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-            ],
-
-            // --- Active Habit Schedules Section (Caretaker Only) ---
-            if (_userRole == 'caretaker' && activeHabits.isNotEmpty) ...[
-              _buildSectionHeader(
-                'กิจวัตรที่ใช้งานอยู่',
-                Icons.calendar_month,
-                _habitColor,
-                screenWidth,
-              ),
-              ...activeHabits.map(
-                (item) => _buildHabitScheduleCardWithControls(
-                  item['data'],
-                  item['id'],
-                  screenWidth,
-                ),
-              ),
-            ],
-
-            // --- Upcoming Section ---
-            if (upcoming.isNotEmpty) ...[
-              _buildSectionHeader(
-                'งานที่กำลังมาถึง',
-                Icons.hourglass_bottom,
-                Colors.grey.shade600,
-                screenWidth,
-              ),
-              ...upcoming.map(
-                (item) => item['type'] == 'countdown'
-                    ? _buildCountdownCardWithControls(
-                        item['data'],
-                        item['id'],
-                        screenWidth,
-                      )
-                    : _buildAppointmentCardWithControls(
+                color: Colors.white,
+                child: Column(
+                  children: [
+                    _buildSectionHeader(
+                      'กิจกรรมวันนี้!',
+                      Icons.celebration_rounded,
+                      _todayEventColor,
+                      screenWidth,
+                    ),
+                    ...todaysCountdowns.map(
+                      (item) => _buildCountdownCardWithControls(
                         item['data'],
                         item['id'],
                         screenWidth,
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
               ),
-            ],
-          ],
+
+            // --- Active Habit Schedules Section (Caretaker Only) ---
+            if (_userRole == 'caretaker' && activeHabits.isNotEmpty)
+              Card(
+                // Wrap section in Card
+                elevation: 1.5,
+                shadowColor: Colors.black.withValues(alpha: 0.06),
+                margin: const EdgeInsets.only(bottom: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                color: Colors.white,
+                child: Column(
+                  children: [
+                    _buildSectionHeader(
+                      'กิจวัตรที่ใช้งานอยู่',
+                      Icons.calendar_month,
+                      _habitColor,
+                      screenWidth,
+                    ),
+                    ...activeHabits.map(
+                      (item) => _buildHabitScheduleCardWithControls(
+                        item['data'],
+                        item['id'],
+                        screenWidth,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+
+            // --- Upcoming Section ---
+            if (upcoming.isNotEmpty)
+              Card(
+                // Wrap section in Card
+                elevation: 1.5,
+                shadowColor: Colors.black.withValues(alpha: 0.06),
+                margin: const EdgeInsets.only(bottom: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                color: Colors.white,
+                child: Column(
+                  children: [
+                    _buildSectionHeader(
+                      'งานที่กำลังมาถึง',
+                      Icons.hourglass_bottom,
+                      Colors.grey.shade600,
+                      screenWidth,
+                    ),
+                    ...upcoming.map(
+                      (item) => item['type'] == 'countdown'
+                          ? _buildCountdownCardWithControls(
+                              item['data'],
+                              item['id'],
+                              screenWidth,
+                            )
+                          : _buildAppointmentCardWithControls(
+                              item['data'],
+                              item['id'],
+                              screenWidth,
+                            ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+          ], // End ListView children
         );
       },
     );

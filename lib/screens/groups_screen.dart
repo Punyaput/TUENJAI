@@ -394,7 +394,6 @@ class _GroupsScreenState extends State<GroupsScreen> {
                     ),
 
                     const SizedBox(width: 16),
-                    // Group info (unchanged)
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,7 +466,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
         // borderRadius: BorderRadius.circular(12), // Already handled by ClipRRect
       ),
       child: Icon(
-        Icons.group_outlined, // Use outlined icon
+        Icons.home, // Use outlined icon
         size: 30,
         color: const Color(0xFF7ED6A8).withValues(alpha: 0.8),
       ),

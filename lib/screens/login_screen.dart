@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,10 +10,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/logo_widget.dart';
 import '../widgets/background_circles.dart';
+import '../utils/legal_text.dart';
 import './otp_verification_screen.dart';
 import './home_screen.dart';
 import './profile_setup_screen.dart';
-import './role_selection_screen.dart'; // Make sure this import exists
+import './role_selection_screen.dart';
+import './legal_display_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,6 +31,9 @@ class _LoginScreenState extends State<LoginScreen> {
   String _selectedCountryFlag = '🇹🇭';
   bool _isLoading = false; // <-- Add loading state
 
+  late TapGestureRecognizer _termsRecognizer;
+  late TapGestureRecognizer _privacyRecognizer;
+
   final List<Map<String, String>> _countries = [
     {'code': '+66', 'flag': '🇹🇭', 'name': 'Thailand'},
     // ... other countries
@@ -40,8 +46,49 @@ class _LoginScreenState extends State<LoginScreen> {
     return _phoneController.text.isNotEmpty && _acceptedTerms && !_isLoading;
   }
 
+  @override
+  void initState() {
+    super.initState();
+    // Initialize recognizers in initState
+    _termsRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        // Navigate to LegalDisplayScreen for Terms
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const LegalDisplayScreen(
+              title: 'ข้อกำหนดการใช้งาน', // "Terms of Service"
+              markdownContent: kTermsOfServiceText, // Pass ToS text
+            ),
+          ),
+        );
+      };
+
+    _privacyRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        // Navigate to LegalDisplayScreen for Privacy Policy
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const LegalDisplayScreen(
+              title: 'นโยบายความเป็นส่วนตัว', // "Privacy Policy"
+              markdownContent: kPrivacyPolicyText, // Pass Privacy Policy text
+            ),
+          ),
+        );
+      };
+  }
+
+  @override
+  void dispose() {
+    // Dispose recognizers to prevent memory leaks
+    _termsRecognizer.dispose();
+    _privacyRecognizer.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
   void _showCountryPicker() {
-    // ... (This function is unchanged)
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -115,7 +162,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _sendOtp() async {
-    // ... (This function is unchanged) ...
     if (!_isFormValid) return;
     setState(() {
       _isLoading = true;
@@ -184,7 +230,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Helper function to check where to go after auto-login
   void _navigateToNextScreenAfterLogin() async {
-    // ... (This function is unchanged) ...
     final user = _auth.currentUser;
     if (user == null) return;
 
@@ -478,7 +523,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       text: TextSpan(
                                         style: TextStyle(
                                           fontFamily: 'NotoLoopedThaiUI',
-                                          fontSize: screenWidth * 0.035,
+                                          fontSize: screenWidth * 0.039,
                                           color: const Color(0xFF374151),
                                           height: 1.5,
                                         ),
@@ -494,10 +539,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 0xFF2E88F3,
                                               ),
                                             ),
+                                            recognizer: _termsRecognizer,
                                           ),
                                           const TextSpan(text: ' และ '),
                                           TextSpan(
-                                            text: 'นโยบายความเป็นส่วนตัว',
+                                            text: '\nนโยบายความเป็นส่วนตัว',
                                             style: TextStyle(
                                               color: const Color(0xFF2E88F3),
                                               decoration:
@@ -506,6 +552,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 0xFF2E88F3,
                                               ),
                                             ),
+                                            recognizer: _privacyRecognizer,
                                           ),
                                         ],
                                       ),
@@ -523,7 +570,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               top:
                                   screenHeight *
                                   0.03, // Minimum space above button
-                              bottom: screenHeight * 0.05, // Bottom padding
+                              bottom: screenHeight * 0.16, // Bottom padding
                             ),
                             // This container ensures the spinner doesn't shrink the space
                             child: Container(
@@ -550,11 +597,5 @@ class _LoginScreenState extends State<LoginScreen> {
         ],
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _phoneController.dispose();
-    super.dispose();
   }
 }

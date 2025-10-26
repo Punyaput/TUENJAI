@@ -10,6 +10,7 @@ import {
   FieldPath,
   Timestamp,
   DocumentSnapshot,
+  WriteBatch,
 } from "firebase-admin/firestore";
 import { getMessaging, MulticastMessage } from "firebase-admin/messaging";
 
@@ -1122,3 +1123,90 @@ async function notifyAssigneesOfUpcomingTask(
     logger.error(`notifyUpcoming: Error sending notification for task ${taskId}:`, error);
   }
 }
+
+// --- NEW HELPER: Delete a collection/subcollection in batches ---
+async function deleteCollection(
+  collectionPath: string,
+  batchSize: number
+): Promise<void> {
+  const collectionRef = db.collection(collectionPath);
+  const query = collectionRef.orderBy("__name__").limit(batchSize);
+
+  return new Promise((resolve, reject) => {
+    deleteQueryBatch(query, resolve).catch(reject);
+  });
+}
+
+async function deleteQueryBatch(
+  query: FirebaseFirestore.Query,
+  resolve: () => void
+): Promise<void> {
+  const snapshot = await query.get();
+
+  if (snapshot.size === 0) {
+    // When there are no documents left, we are done
+    resolve();
+    return;
+  }
+  // Delete documents in a batch
+  const batch: WriteBatch = db.batch();
+  snapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+  await batch.commit();
+
+  // Recurse on the next process tick, to avoid exploding the stack.
+  process.nextTick(() => {
+    deleteQueryBatch(query, resolve);
+  });
+}
+
+// --- NEW FUNCTION: checkEmptyGroupAndDelete ---
+/**
+ * Triggers when a group document is updated.
+ * If the members array becomes empty, deletes the group and its tasks subcollection.
+ */
+export const checkEmptyGroupAndDelete = onDocumentUpdated(
+  "groups/{groupId}",
+  async (event) => {
+    const afterSnapshot = event.data?.after;
+    const groupId = event.params.groupId;
+
+    // Ensure snapshot exists after update
+    if (!afterSnapshot?.exists) {
+      logger.log(`checkEmptyGroup: Group ${groupId} deleted or snapshot missing.`);
+      return;
+    }
+
+    const afterData = afterSnapshot.data();
+    if (!afterData) {
+      logger.log(`checkEmptyGroup: Data missing for group ${groupId}.`);
+      return;
+    }
+
+    const members: string[] = afterData.members ?? [];
+
+    // --- Check if the group is now empty ---
+    if (members.length === 0) {
+      logger.log(`Group ${groupId} is now empty. Initiating deletion.`);
+
+      try {
+        // 1. Delete the 'tasks' subcollection
+        const tasksPath = `groups/${groupId}/tasks`;
+        logger.log(`Deleting subcollection: ${tasksPath}`);
+        await deleteCollection(tasksPath, 100); // Adjust batch size if needed
+        logger.log(`Successfully deleted subcollection: ${tasksPath}`);
+
+        // 2. Delete the group document itself
+        logger.log(`Deleting group document: ${groupId}`);
+        await afterSnapshot.ref.delete();
+        logger.log(`Successfully deleted group document: ${groupId}`);
+      } catch (error) {
+        logger.error(`Error deleting empty group ${groupId} and its tasks:`, error);
+        // Consider adding retry logic or error reporting here
+      }
+    } else {
+      // logger.log(`Group ${groupId} still has ${members.length} members.`); // Optional log
+    }
+  }
+);

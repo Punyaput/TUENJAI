@@ -18,7 +18,7 @@ const String kNotificationChannelDesc =
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // We'll mostly be using local notifications,
   // but this is here if we need server-side push (e.g., "Task Completed")
-  print("Handling a background message: ${message.messageId}");
+  // print("Handling a background message: ${message.messageId}");
 }
 
 class NotificationService {
@@ -98,8 +98,8 @@ class NotificationService {
     // 3. Set up listeners
     // Handles messages that come in while the app is in the foreground
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print("Got a message whilst in the foreground!");
-      print("Message data: ${message.data}");
+      // print("Got a message whilst in the foreground!");
+      // print("Message data: ${message.data}");
 
       final notification = message.notification;
       final android = message.notification?.android; // Android specific details
@@ -140,7 +140,7 @@ class NotificationService {
 
     // Handles taps on push notifications
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print("User tapped push notification: ${message.data}");
+      // print("User tapped push notification: ${message.data}");
       // TODO: Handle navigation, e.g., open a specific group
     });
 
@@ -156,9 +156,9 @@ class NotificationService {
       await FirebaseFirestore.instance.collection('users').doc(_userId).update({
         'fcmTokens': FieldValue.arrayUnion([token]),
       });
-      print("My Token: $token");
+      // print("My Token: $token");
     } catch (e) {
-      print("Error saving FCM token: $e");
+      // print("Error saving FCM token: $e");
     }
   }
 
@@ -167,7 +167,7 @@ class NotificationService {
   /// Callback for when a user taps a notification's *action button*
   /// (e.g., "Completed")
   static void _onActionTapped(NotificationResponse response) {
-    print("Action Tapped! Payload: ${response.payload}");
+    // print("Action Tapped! Payload: ${response.payload}");
     if (response.actionId == kNotificationActionComplete) {
       // User tapped "Completed"!
       final String? payload =
@@ -180,7 +180,7 @@ class NotificationService {
 
   /// Callback for when a user taps the *body* of a local notification
   void _onNotificationTapped(NotificationResponse response) {
-    print("Notification Tapped! Payload: ${response.payload}");
+    // print("Notification Tapped! Payload: ${response.payload}");
     // TODO: Handle navigation
     // The payload could be "groupId/taskId"
     // We can parse this and navigate to the GroupDetailScreen
@@ -200,7 +200,7 @@ class NotificationService {
     final String docId = parts[2];
     final String? subTaskKey = (parts.length > 3) ? parts[3] : null;
 
-    print("Completing task: $type, $docId, $subTaskKey");
+    // print("Completing task: $type, $docId, $subTaskKey");
 
     try {
       final db = FirebaseFirestore.instance;
@@ -233,7 +233,7 @@ class NotificationService {
             });
       }
     } catch (e) {
-      print("Error completing task from background: $e");
+      // print("Error completing task from background: $e");
     }
   }
 

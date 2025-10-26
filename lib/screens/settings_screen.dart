@@ -25,7 +25,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isDeleting = false; // Loading state for deletion
 
   void _onItemTapped(int index) {
-    // ... (Navigation logic remains unchanged) ...
     if (index == _selectedIndex) return;
     if (index == 0) {
       Navigator.pushReplacement(
@@ -38,7 +37,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showLogoutDialog() {
-    // ... (Logout dialog remains unchanged) ...
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {

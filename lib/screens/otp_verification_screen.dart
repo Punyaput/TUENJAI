@@ -11,6 +11,7 @@ import '../widgets/logo_widget.dart';
 import '../widgets/background_circles.dart';
 import '../widgets/otp_input_field.dart';
 import './role_selection_screen.dart'; // Make sure this import is here
+import 'package:flutter/services.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -28,7 +29,8 @@ class OtpVerificationScreen extends StatefulWidget {
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
 }
 
-class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
+class _OtpVerificationScreenState extends State<OtpVerificationScreen>
+    with WidgetsBindingObserver {
   final List<TextEditingController> _otpControllers = List.generate(
     6,
     (index) => TextEditingController(),
@@ -49,6 +51,15 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   void initState() {
     super.initState();
+    // --- Add Binding Observer ---
+    WidgetsBinding.instance.addObserver(this);
+    // --- Add Keyboard Listener ---
+    HardwareKeyboard.instance.addHandler(_handleHardwareKeyEvent);
+
+    // Add listeners to focus nodes
+    for (int i = 0; i < 6; i++) {
+      _focusNodes[i].addListener(_handleFocusChange);
+    }
     _currentVerificationId = widget.verificationId;
     _startResendTimer(); // Start the timer
     _listenForAutoFill(); // Listen for the token
@@ -62,14 +73,41 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   // --- Cancel timer in dispose ---
   @override
   void dispose() {
-    _timer?.cancel(); // <-- IMPORTANT: Cancel the timer
-    for (var controller in _otpControllers) {
-      controller.dispose();
+    // --- Remove Binding Observer ---
+    WidgetsBinding.instance.removeObserver(this);
+    // --- Remove Keyboard Listener ---
+    HardwareKeyboard.instance.removeHandler(_handleHardwareKeyEvent);
+
+    // Remove focus listeners
+    for (int i = 0; i < 6; i++) {
+      _focusNodes[i].removeListener(_handleFocusChange);
     }
-    for (var focusNode in _focusNodes) {
-      focusNode.dispose();
-    }
+    // ... (rest of dispose: timer, controllers, focus nodes) ...
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.paused) {
+      HardwareKeyboard.instance.removeHandler(_handleHardwareKeyEvent);
+    } else if (state == AppLifecycleState.resumed) {
+      HardwareKeyboard.instance.addHandler(_handleHardwareKeyEvent);
+    }
+  }
+
+  int _currentlyFocusedIndex = 0; // Track focused field
+
+  void _handleFocusChange() {
+    for (int i = 0; i < 6; i++) {
+      if (_focusNodes[i].hasFocus) {
+        setState(() {
+          // Use setState to ensure UI updates if needed based on focus
+          _currentlyFocusedIndex = i;
+        });
+        break;
+      }
+    }
   }
 
   void _listenForAutoFill() {
@@ -145,19 +183,49 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       _focusNodes[index + 1].requestFocus();
     } else if (value.isNotEmpty && index == 5) {
       _focusNodes[index].unfocus();
-      if (_isOtpComplete) _verifyOtp(); // Auto-submit on 6th digit
+      if (_isOtpComplete) _verifyOtp();
     }
     setState(() {});
   }
 
-  void _onBackspace(int index) {
-    if (index > 0 && _otpControllers[index].text.isEmpty) {
-      _otpControllers[index - 1].clear();
-      _focusNodes[index - 1].requestFocus();
-    } else if (index == 0) {
-      _otpControllers[0].clear();
+  bool _handleHardwareKeyEvent(KeyEvent event) {
+    // We only care about key down events for backspace
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.backspace) {
+      // Capture the index of the currently focused box *before* any changes
+      final int currentIndex = _currentlyFocusedIndex;
+
+      // Check if the currently focused field is empty AND not the first field
+      if (currentIndex > 0 && _otpControllers[currentIndex].text.isEmpty) {
+        // Determine the index of the field TO CLEAR (the previous one)
+        final int previousIndex = currentIndex - 1;
+
+        // Move focus to the previous field
+        _focusNodes[previousIndex].requestFocus();
+
+        // Clear the *previous* field's text AFTER a short delay
+        // Use the captured 'previousIndex' variable
+        Future.delayed(const Duration(milliseconds: 50), () {
+          if (mounted) {
+            // Ensure widget is still mounted
+            // Check if the focus is still where we expect it, just in case,
+            // although clearing based on previousIndex should be safe.
+            // _otpControllers[previousIndex].clear(); // Directly clear using captured index
+            _otpControllers[previousIndex].text =
+                ""; // Use assignment to trigger onChanged if needed by any listeners, or just .clear()
+          }
+        });
+        // Return true to indicate we handled the event
+        return true;
+      } else if (currentIndex == 0 && _otpControllers[0].text.isNotEmpty) {
+        // If backspace is pressed on the first field *and it has content*, clear it.
+        _otpControllers[0].clear();
+        // Return true to indicate we handled the event
+        return true;
+      }
     }
-    setState(() {});
+    // Return false to let other handlers process the event if we didn't handle it
+    return false;
   }
 
   void _resendOtp() async {
@@ -330,7 +398,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (Your build method is unchanged) ...
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
 
@@ -362,7 +429,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    SizedBox(height: screenHeight * 0.05),
+                    SizedBox(height: screenHeight * 0.02),
                     const LogoWidget(),
                     SizedBox(height: screenHeight * 0.03),
                     Text(
@@ -374,7 +441,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         color: const Color(0xFF7ED6A8),
                       ),
                     ),
-                    SizedBox(height: screenHeight * 0.04),
+                    SizedBox(height: screenHeight * 0.02),
                     Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal: screenWidth * 0.02,
@@ -429,7 +496,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                             controller: _otpControllers[index],
                             focusNode: _focusNodes[index],
                             onChanged: (value) => _onOtpChanged(index, value),
-                            onBackspace: () => _onBackspace(index),
+                            // No index or allFocusNodes needed here now
                           );
                         }),
                       ),
