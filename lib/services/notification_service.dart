@@ -190,7 +190,6 @@ class NotificationService {
   static Future<void> _handleTaskCompletion(String payload) async {
     // This is running in a background isolate.
     // We must initialize Firebase.
-    // await Firebase.initializeApp(); // <-- May be needed here
 
     final parts = payload.split('/');
     if (parts.length < 2) return;

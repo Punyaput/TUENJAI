@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:285487496688:android:0e42abfa8e09d84d533135",
+        "mobilesdk_app_id": "1:285487496688:android:525ff7f019c0fe58533135",
         "android_client_info": {
-          "package_name": "com.example.flutter_application_sf333"
+          "package_name": "com.tuxedocat.tuenjai"
         }
       },
       "oauth_client": [],

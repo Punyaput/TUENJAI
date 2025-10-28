@@ -1,4 +1,4 @@
-package com.example.flutter_application_sf333
+package com.tuxedocat.tuenjai
 
 import io.flutter.embedding.android.FlutterActivity
 

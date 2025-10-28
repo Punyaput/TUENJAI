@@ -41,49 +41,48 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBfXtzcZ03VudWykVyfoRSNvM3TtPmDnhQ',
-    appId: '1:716718206439:web:6f4f03e04cd027f12b2142',
-    messagingSenderId: '716718206439',
-    projectId: 'androidappsf333',
-    authDomain: 'androidappsf333.firebaseapp.com',
-    storageBucket: 'androidappsf333.firebasestorage.app',
-    measurementId: 'G-XYVE3MR2W1',
+    apiKey: 'AIzaSyAsTB5AeJsOfMFS3yjVJMDVz0GQ2zpnFD0',
+    appId: '1:285487496688:web:a7f659541474357b533135',
+    messagingSenderId: '285487496688',
+    projectId: 'tuenjai-prod',
+    authDomain: 'tuenjai-prod.firebaseapp.com',
+    storageBucket: 'tuenjai-prod.firebasestorage.app',
+    measurementId: 'G-Q8ER7GDQJF',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCXHcn_1bXvn2NXeTAtBS3We09TonwCmDU',
-    appId: '1:716718206439:android:2415019375f43e632b2142',
-    messagingSenderId: '716718206439',
-    projectId: 'androidappsf333',
-    storageBucket: 'androidappsf333.firebasestorage.app',
+    apiKey: 'AIzaSyABu1IrlDwPW_KxGqvlOZXmm_I5iGcM5Ww',
+    appId: '1:285487496688:android:525ff7f019c0fe58533135',
+    messagingSenderId: '285487496688',
+    projectId: 'tuenjai-prod',
+    storageBucket: 'tuenjai-prod.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCo_ZnouTgChfhPTTjAglpkbLoUC0n7YwM',
-    appId: '1:716718206439:ios:49eb596fc67aa0a82b2142',
-    messagingSenderId: '716718206439',
-    projectId: 'androidappsf333',
-    storageBucket: 'androidappsf333.firebasestorage.app',
+    apiKey: 'AIzaSyBgkPF5rQ0EilN8yuaziPeOWHZWbLrGkGs',
+    appId: '1:285487496688:ios:2c16f59d2e4b28af533135',
+    messagingSenderId: '285487496688',
+    projectId: 'tuenjai-prod',
+    storageBucket: 'tuenjai-prod.firebasestorage.app',
     iosBundleId: 'com.example.flutterApplicationSf333',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyCo_ZnouTgChfhPTTjAglpkbLoUC0n7YwM',
-    appId: '1:716718206439:ios:49eb596fc67aa0a82b2142',
-    messagingSenderId: '716718206439',
-    projectId: 'androidappsf333',
-    storageBucket: 'androidappsf333.firebasestorage.app',
+    apiKey: 'AIzaSyBgkPF5rQ0EilN8yuaziPeOWHZWbLrGkGs',
+    appId: '1:285487496688:ios:2c16f59d2e4b28af533135',
+    messagingSenderId: '285487496688',
+    projectId: 'tuenjai-prod',
+    storageBucket: 'tuenjai-prod.firebasestorage.app',
     iosBundleId: 'com.example.flutterApplicationSf333',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBfXtzcZ03VudWykVyfoRSNvM3TtPmDnhQ',
-    appId: '1:716718206439:web:ad94e172bca09e012b2142',
-    messagingSenderId: '716718206439',
-    projectId: 'androidappsf333',
-    authDomain: 'androidappsf333.firebaseapp.com',
-    storageBucket: 'androidappsf333.firebasestorage.app',
-    measurementId: 'G-H85C2FME0J',
+    apiKey: 'AIzaSyAsTB5AeJsOfMFS3yjVJMDVz0GQ2zpnFD0',
+    appId: '1:285487496688:web:abb36c103666a35e533135',
+    messagingSenderId: '285487496688',
+    projectId: 'tuenjai-prod',
+    authDomain: 'tuenjai-prod.firebaseapp.com',
+    storageBucket: 'tuenjai-prod.firebasestorage.app',
+    measurementId: 'G-KSSTWG3V6J',
   );
-
 }
