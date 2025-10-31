@@ -1,6 +1,6 @@
 {
   "projects": {
-    "default": "androidappsf333",
+    "default": "tuenjai-prod",
     "dev": "androidappsf333",
     "prod": "tuenjai-prod"
   },

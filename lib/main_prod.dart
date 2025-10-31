@@ -25,7 +25,7 @@ void main() async {
   try {
     // Activate App Check with Play Integrity provider
     await FirebaseAppCheck.instance.activate(
-      androidProvider: AndroidProvider.playIntegrity,
+      androidProvider: AndroidProvider.playIntegrity, // AndroidProider.playIntegrity
       // appleProvider: AppleProvider.appAttest, // For iOS later
     );
     print("Firebase App Check activated.");

@@ -446,6 +446,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (taskSnapshot.hasError) {
+                // Print error object to console
+                // print("!!!!!!!! HOME SCREEN STREAM ERROR !!!!!!!");
+                // print(taskSnapshot.error);
+                // print(taskSnapshot.stackTrace); // Also print the stack trace
                 return const Center(child: Text('เกิดข้อผิดพลาดในการโหลดงาน'));
               }
               if (!taskSnapshot.hasData || taskSnapshot.data!.docs.isEmpty) {
@@ -945,6 +949,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (taskSnapshot.hasError) {
+                // Print error object to the console
+                // print("!!!!!!!! HOME SCREEN STREAM ERROR !!!!!!!");
+                // print(taskSnapshot.error);
+                // print(taskSnapshot.stackTrace); // Also print the stack trace
                 return const Center(child: Text('เกิดข้อผิดพลาดในการโหลดงาน'));
               }
               if (!taskSnapshot.hasData ||
@@ -2490,14 +2498,30 @@ class _HomeScreenState extends State<HomeScreen> {
     BuildContext context,
     Map<String, dynamic> itemData,
   ) {
+    // --- Define Thai names for tags ---
+    final Map<String, String> _taskTypeNames = {
+      'appointment': "นัดหมาย",
+      'countdown': "นับถอยหลัง",
+      'habit_item': "กิจวัตร",
+      'habit_schedule': "ตารางกิจวัตร",
+      'unknown': 'งาน',
+    };
+
     // Extract common data
     final String type = itemData['type'] ?? 'unknown';
     final Map<String, dynamic> taskData = itemData['data'] ?? {};
-    // final String taskId =
-    //     itemData['id'] ?? itemData['habitDocId'] ?? 'unknown_id';
+    final String taskId =
+        itemData['id'] ?? itemData['habitDocId'] ?? 'unknown_id';
+
+    // --- FIX 1: Use _groupDataCache ---
     final String groupId =
         itemData['groupId'] ?? taskData['groupId'] ?? 'unknown_group';
-    final String groupName = _groupNameCache[groupId] ?? 'Loading...';
+    // Get the data map from the new cache
+    final Map<String, String?>? groupData = _groupDataCache[groupId];
+    // Get the name from the map, providing a fallback
+    final String groupName = groupData?['name'] ?? 'Loading...';
+    // --- END FIX 1 ---
+
     String title = taskData['title'] ?? itemData['title'] ?? 'No Title';
     final String description = taskData['description'] ?? '';
     final List<String> assignedToIds =
@@ -2507,13 +2531,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final bool isCompleted =
         itemData['isCompleted'] ?? (taskData['status'] == 'completed');
     final Timestamp? completedAt = taskData['completedAt'];
-    // Get subTaskKey safely
+
+    // --- (Includes previous fix for subTaskKey): Safe subTaskKey access ---
     final String? subTaskKey = itemData['subTaskKey'];
-    // Get completion history map safely
     final Map<String, dynamic>? completionHistory =
         taskData['completionHistory'] as Map<String, dynamic>?;
-
-    // Determine completedByUid
     String? completedByUid = taskData['completedBy']; // Check appointment first
     if (completedByUid == null &&
         subTaskKey != null &&
@@ -2522,46 +2544,42 @@ class _HomeScreenState extends State<HomeScreen> {
       completedByUid =
           completionHistory['${subTaskKey}_by']; // Use interpolation
     }
+    // --- END FIX ---
 
     IconData typeIcon = Icons.task;
     Color typeColor = Colors.grey;
-    String typeText = "Task";
+    String typeText = _taskTypeNames[type] ?? "Task"; // Use Thai name
     String dateTimeText = "";
 
     // Type-specific details
     if (type == 'appointment') {
       typeIcon = Icons.event_available_outlined;
       typeColor = _appointmentColor;
-      typeText = "Appointment";
-      title = taskData['title'] ?? 'Appointment'; // Ensure title is correct
+      title = taskData['title'] ?? 'Appointment';
       final Timestamp? ts = taskData['taskDateTime'];
       if (ts != null) {
         dateTimeText =
-            "Due: ${DateFormat('d MMM y HH:mm', 'th').format(ts.toDate())}";
+            "ถึงกำหนด: ${DateFormat('d MMM y HH:mm', 'th').format(ts.toDate())}";
       }
     } else if (type == 'habit_item') {
       typeIcon = Icons.calendar_month_outlined;
       typeColor = _habitColor;
-      typeText = "Habit Task";
-      title = itemData['title'] ?? 'Habit Task'; // Use item title
-      dateTimeText = "Time: ${itemData['time'] ?? '--:--'} (Today)";
+      title = itemData['title'] ?? 'Habit Task';
+      dateTimeText = "เวลา: ${itemData['time'] ?? '--:--'} (วันนี้)";
     } else if (type == 'countdown') {
       typeIcon = Icons.hourglass_bottom;
       typeColor = _countdownColor;
-      typeText = "Countdown";
-      title = taskData['title'] ?? 'Countdown'; // Ensure title is correct
+      title = taskData['title'] ?? 'Countdown';
       final Timestamp? ts = taskData['taskDateTime'];
       if (ts != null) {
         dateTimeText =
-            "Target Date: ${DateFormat('d MMM y', 'th').format(ts.toDate())}";
+            "วันเป้าหมาย: ${DateFormat('d MMM y', 'th').format(ts.toDate())}";
       }
     } else if (type == 'habit_schedule') {
       // For the summary card
       typeIcon = Icons.calendar_month;
       typeColor = _habitColor;
-      typeText = "Habit Schedule";
       title = taskData['title'] ?? 'Habit Schedule';
-      // Schedule summary (simple version)
       final schedule =
           (taskData['schedule'] as Map?)?.cast<String, dynamic>() ?? {};
       List<String> days = [];
@@ -2574,8 +2592,8 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
       dateTimeText = days.isNotEmpty
-          ? 'Repeats: ${days.join(", ")} ($totalItems items total)'
-          : 'No schedule set';
+          ? 'ทำซ้ำ: ${days.join(", ")} (รวม $totalItems รายการ)'
+          : 'ไม่มีตารางเวลา';
     }
 
     showDialog(
@@ -2612,13 +2630,39 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           content: SingleChildScrollView(
-            // Allow scrolling for long details
             child: ListBody(
               children: <Widget>[
-                Divider(color: typeColor.withValues(alpha: 0.3)),
+                Divider(color: typeColor.withOpacity(0.3)),
+
+                // --- ENHANCEMENT 2: Add Task Type Tag ---
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: typeColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      typeText, // The Thai name
+                      style: TextStyle(
+                        fontFamily: 'NotoLoopedThaiUI',
+                        color: typeColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // --- END ENHANCEMENT ---
                 if (description.isNotEmpty) ...[
                   const Text(
-                    'Description:',
+                    'รายละเอียด:',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                   Text(description),
@@ -2631,8 +2675,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 10),
                 ],
+                // This now uses the fixed groupName
                 Text(
-                  'Group: $groupName',
+                  'กลุ่ม: $groupName',
                   style: const TextStyle(color: Colors.black54),
                 ),
                 const SizedBox(height: 10),
@@ -2646,11 +2691,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     ]),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Text('Loading details...');
+                        return const Text('กำลังโหลด...');
                       }
+
                       final names = snapshot.data ?? {};
                       final assignedNames = assignedToIds
-                          .map((id) => names[id] ?? 'Unknown')
+                          .map((id) => names[id] ?? 'ไม่พบชื่อ')
                           .join(', ');
                       final completerName = names[completedByUid];
 
@@ -2659,11 +2705,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           if (assignedToIds.isNotEmpty &&
                               type != 'habit_schedule')
-                            Text('Assigned to: $assignedNames'),
+                            Text('มอบหมายให้: $assignedNames'),
                           if (isCompleted && completerName != null) ...[
                             const SizedBox(height: 5),
                             Text(
-                              'Completed by: $completerName${completedAt != null ? ' on ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}' : ''}',
+                              'เสร็จสิ้นโดย: $completerName' +
+                                  (completedAt != null
+                                      ? ' เมื่อ ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}'
+                                      : ''),
                               style: TextStyle(
                                 color: _completedColor,
                                 fontWeight: FontWeight.w600,
@@ -2672,7 +2721,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           ] else if (isCompleted) ...[
                             const SizedBox(height: 5),
                             Text(
-                              'Completed${completedAt != null ? ' on ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}' : ''}',
+                              'เสร็จสิ้นแล้ว' +
+                                  (completedAt != null
+                                      ? ' เมื่อ ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}'
+                                      : ''),
                               style: TextStyle(
                                 color: _completedColor,
                                 fontWeight: FontWeight.w600,
@@ -2689,7 +2741,7 @@ class _HomeScreenState extends State<HomeScreen> {
           actions: <Widget>[
             TextButton(
               child: const Text(
-                'Close',
+                'ปิด',
                 style: TextStyle(fontFamily: 'NotoLoopedThaiUI'),
               ),
               onPressed: () {
