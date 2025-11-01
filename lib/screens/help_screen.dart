@@ -18,12 +18,12 @@ class HelpScreen extends StatelessWidget {
       shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ExpansionTile(
-        leading: Icon(icon, color: theme.colorScheme.primary),
+        leading: Icon(icon, color: theme.colorScheme.secondary),
         title: Text(
           title,
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: theme.colorScheme.primary,
+            color: theme.colorScheme.secondary,
             fontSize: 16,
           ),
         ),

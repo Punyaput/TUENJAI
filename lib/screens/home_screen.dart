@@ -1,5 +1,7 @@
 // lib/screens/home_screen.dart
 
+// ignore_for_file: unnecessary_question_mark
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -88,6 +90,84 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     }
+  }
+
+  // Add this new cache alongside _userNameCache and _groupDataCache
+  final Map<String, Map<String, dynamic?>> _userDataCache = {};
+
+  // Add this new function inside _HomeScreenState
+  Future<Map<String, Map<String, dynamic?>>> _getUserData(
+    List<String> userIds,
+  ) async {
+    Map<String, Map<String, dynamic?>> userDataMap = {};
+    List<String> idsToFetch = [];
+
+    // Check cache first
+    for (String id in userIds.toSet()) {
+      if (!_userDataCache.containsKey(id) && id.isNotEmpty) {
+        idsToFetch.add(id);
+      } else if (_userDataCache.containsKey(id)) {
+        userDataMap[id] = _userDataCache[id]!;
+      }
+    }
+
+    // Fetch from Firestore
+    if (idsToFetch.isNotEmpty) {
+      try {
+        for (var i = 0; i < idsToFetch.length; i += 10) {
+          var batchIds = idsToFetch.sublist(
+            i,
+            i + 10 > idsToFetch.length ? idsToFetch.length : i + 10,
+          );
+          if (batchIds.isEmpty) continue;
+
+          final querySnapshot = await FirebaseFirestore.instance
+              .collection('users')
+              .where(FieldPath.documentId, whereIn: batchIds)
+              .get();
+
+          final Map<String, Map<String, dynamic>> foundUsers = {
+            for (var doc in querySnapshot.docs) doc.id: doc.data(),
+          };
+
+          // Iterate through the IDs we tried to fetch
+          for (String idInBatch in batchIds) {
+            if (foundUsers.containsKey(idInBatch)) {
+              // User exists
+              final data = foundUsers[idInBatch]!;
+              final userData = {
+                'username': data['username'] ?? 'Unknown User',
+                'profilePicUrl': data['profilePicUrl'] as String?,
+              };
+              _userDataCache[idInBatch] = userData;
+              userDataMap[idInBatch] = userData;
+            } else {
+              // User does not exist (deleted)
+              final userData = {
+                'username': 'ผู้ใช้ที่ถูกลบ', // "Deleted User"
+                'profilePicUrl': null,
+              };
+              _userDataCache[idInBatch] = userData;
+              userDataMap[idInBatch] = userData;
+            }
+          }
+        }
+      } catch (e) {
+        print("Error fetching user data: $e");
+        // Handle or log error
+      }
+    }
+
+    // Final check and fallback
+    for (String id in userIds) {
+      userDataMap.putIfAbsent(
+        id,
+        () =>
+            _userDataCache[id] ??
+            {'username': 'ผู้ใช้ที่ถูกลบ', 'profilePicUrl': null},
+      );
+    }
+    return userDataMap;
   }
 
   Future<Map<String, String>> _getUsernames(List<String> userIds) async {
@@ -2512,15 +2592,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final Map<String, dynamic> taskData = itemData['data'] ?? {};
     final String taskId =
         itemData['id'] ?? itemData['habitDocId'] ?? 'unknown_id';
-
-    // --- FIX 1: Use _groupDataCache ---
     final String groupId =
         itemData['groupId'] ?? taskData['groupId'] ?? 'unknown_group';
-    // Get the data map from the new cache
     final Map<String, String?>? groupData = _groupDataCache[groupId];
-    // Get the name from the map, providing a fallback
     final String groupName = groupData?['name'] ?? 'Loading...';
-    // --- END FIX 1 ---
 
     String title = taskData['title'] ?? itemData['title'] ?? 'No Title';
     final String description = taskData['description'] ?? '';
@@ -2532,26 +2607,25 @@ class _HomeScreenState extends State<HomeScreen> {
         itemData['isCompleted'] ?? (taskData['status'] == 'completed');
     final Timestamp? completedAt = taskData['completedAt'];
 
-    // --- (Includes previous fix for subTaskKey): Safe subTaskKey access ---
+    // --- (Safe subTaskKey access) ---
     final String? subTaskKey = itemData['subTaskKey'];
     final Map<String, dynamic>? completionHistory =
         taskData['completionHistory'] as Map<String, dynamic>?;
-    String? completedByUid = taskData['completedBy']; // Check appointment first
+    String? completedByUid = taskData['completedBy'];
     if (completedByUid == null &&
         subTaskKey != null &&
         completionHistory != null) {
-      // If not from appointment, and we have a subTaskKey and history, look it up
-      completedByUid =
-          completionHistory['${subTaskKey}_by']; // Use interpolation
+      completedByUid = completionHistory['${subTaskKey}_by'];
     }
     // --- END FIX ---
 
     IconData typeIcon = Icons.task;
     Color typeColor = Colors.grey;
-    String typeText = _taskTypeNames[type] ?? "Task"; // Use Thai name
+    String typeText = _taskTypeNames[type] ?? "Task";
     String dateTimeText = "";
+    String habitTime = itemData['time'] ?? '--:--';
 
-    // Type-specific details
+    // Type-specific details (same as before)
     if (type == 'appointment') {
       typeIcon = Icons.event_available_outlined;
       typeColor = _appointmentColor;
@@ -2565,7 +2639,7 @@ class _HomeScreenState extends State<HomeScreen> {
       typeIcon = Icons.calendar_month_outlined;
       typeColor = _habitColor;
       title = itemData['title'] ?? 'Habit Task';
-      dateTimeText = "เวลา: ${itemData['time'] ?? '--:--'} (วันนี้)";
+      dateTimeText = "เวลา: $habitTime (วันนี้)";
     } else if (type == 'countdown') {
       typeIcon = Icons.hourglass_bottom;
       typeColor = _countdownColor;
@@ -2576,7 +2650,6 @@ class _HomeScreenState extends State<HomeScreen> {
             "วันเป้าหมาย: ${DateFormat('d MMM y', 'th').format(ts.toDate())}";
       }
     } else if (type == 'habit_schedule') {
-      // For the summary card
       typeIcon = Icons.calendar_month;
       typeColor = _habitColor;
       title = taskData['title'] ?? 'Habit Schedule';
@@ -2632,9 +2705,7 @@ class _HomeScreenState extends State<HomeScreen> {
           content: SingleChildScrollView(
             child: ListBody(
               children: <Widget>[
-                Divider(color: typeColor.withOpacity(0.3)),
-
-                // --- ENHANCEMENT 2: Add Task Type Tag ---
+                Divider(color: typeColor.withValues(alpha: 0.3)),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Container(
@@ -2643,11 +2714,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: typeColor.withOpacity(0.15),
+                      color: typeColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      typeText, // The Thai name
+                      typeText,
                       style: TextStyle(
                         fontFamily: 'NotoLoopedThaiUI',
                         color: typeColor,
@@ -2658,8 +2729,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // --- END ENHANCEMENT ---
                 if (description.isNotEmpty) ...[
                   const Text(
                     'รายละเอียด:',
@@ -2675,70 +2744,203 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 10),
                 ],
-                // This now uses the fixed groupName
                 Text(
                   'กลุ่ม: $groupName',
                   style: const TextStyle(color: Colors.black54),
                 ),
                 const SizedBox(height: 10),
 
-                // Assigned To / Completed By section
-                if (assignedToIds.isNotEmpty || completedByUid != null)
-                  FutureBuilder<Map<String, String>>(
-                    future: _getUsernames([
-                      ...assignedToIds,
-                      if (completedByUid != null) completedByUid,
-                    ]),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Text('กำลังโหลด...');
-                      }
+                // --- *** MODIFIED ASSIGNEE/COMPLETED BY SECTION *** ---
+                FutureBuilder<Map<String, Map<String, dynamic?>>>(
+                  // Call the new helper function
+                  future: _getUserData([
+                    ...assignedToIds,
+                    if (completedByUid != null) completedByUid,
+                  ]),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Text('กำลังโหลด...');
+                    }
 
-                      final names = snapshot.data ?? {};
-                      final assignedNames = assignedToIds
-                          .map((id) => names[id] ?? 'ไม่พบชื่อ')
-                          .join(', ');
-                      final completerName = names[completedByUid];
+                    final userDataMap = snapshot.data ?? {};
+                    final completerData = userDataMap[completedByUid];
+                    final completerName =
+                        completerData?['username'] ?? 'ไม่พบชื่อ';
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (assignedToIds.isNotEmpty &&
-                              type != 'habit_schedule')
-                            Text('มอบหมายให้: $assignedNames'),
-                          if (isCompleted && completerName != null) ...[
-                            const SizedBox(height: 5),
-                            Text(
-                              'เสร็จสิ้นโดย: $completerName' +
-                                  (completedAt != null
-                                      ? ' เมื่อ ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}'
-                                      : ''),
-                              style: TextStyle(
-                                color: _completedColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ] else if (isCompleted) ...[
-                            const SizedBox(height: 5),
-                            Text(
-                              'เสร็จสิ้นแล้ว' +
-                                  (completedAt != null
-                                      ? ' เมื่อ ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}'
-                                      : ''),
-                              style: TextStyle(
-                                color: _completedColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // --- NEW ASSIGNEE LIST ---
+                        if (assignedToIds.isNotEmpty &&
+                            type != 'habit_schedule') ...[
+                          const Text(
+                            'มอบหมายให้:',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 8),
+                          // Use StatefulBuilder to manage the expanded state
+                          StatefulBuilder(
+                            builder: (context, setModalState) {
+                              // Local state for this builder
+                              bool isExpanded = false;
+                              final bool showExpandButton =
+                                  assignedToIds.length > 5;
+                              final int itemCount = isExpanded
+                                  ? assignedToIds.length
+                                  : (assignedToIds.length > 5
+                                        ? 5
+                                        : assignedToIds.length);
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Build the list of assignees
+                                  ...List.generate(itemCount, (index) {
+                                    final userId = assignedToIds[index];
+                                    final userData = userDataMap[userId];
+                                    final username =
+                                        userData?['username'] ?? 'กำลังโหลด...';
+                                    final profilePicUrl =
+                                        userData?['profilePicUrl'] as String?;
+
+                                    return ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                      leading: CircleAvatar(
+                                        radius: 16,
+                                        backgroundColor: Colors.grey.shade200,
+                                        backgroundImage:
+                                            (profilePicUrl != null &&
+                                                profilePicUrl.isNotEmpty)
+                                            ? NetworkImage(profilePicUrl)
+                                            : null,
+                                        child:
+                                            (profilePicUrl == null ||
+                                                profilePicUrl.isEmpty)
+                                            ? Icon(
+                                                Icons.person_outline,
+                                                size: 16,
+                                                color: Colors.grey.shade500,
+                                              )
+                                            : null,
+                                      ),
+                                      title: Text(
+                                        username,
+                                        style: const TextStyle(
+                                          fontFamily: 'NotoLoopedThaiUI',
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                  // Build the expand/collapse button
+                                  if (showExpandButton)
+                                    TextButton(
+                                      style: TextButton.styleFrom(
+                                        padding: EdgeInsets.zero,
+                                        alignment: Alignment.centerLeft,
+                                      ),
+                                      onPressed: () {
+                                        setModalState(() {
+                                          isExpanded = !isExpanded;
+                                        });
+                                      },
+                                      child: Text(
+                                        isExpanded
+                                            ? 'แสดงน้อยลง' // "Show less"
+                                            : '...ดูทั้งหมด ${assignedToIds.length} คน', // "...See all X people"
+                                        style: TextStyle(
+                                          fontFamily: 'NotoLoopedThaiUI',
+                                          color: Theme.of(context).primaryColor,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
+                          ),
                         ],
-                      );
-                    },
-                  ),
+                        // --- END NEW ASSIGNEE LIST ---
+
+                        // --- EXISTING COMPLETED BY INFO ---
+                        if (isCompleted && completerName != null) ...[
+                          const SizedBox(height: 5),
+                          Text(
+                            'เสร็จสิ้นโดย: $completerName' +
+                                (completedAt != null
+                                    ? ' เมื่อ ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}'
+                                    : ''),
+                            style: TextStyle(
+                              color: _completedColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ] else if (isCompleted) ...[
+                          const SizedBox(height: 5),
+                          Text(
+                            'เสร็จสิ้นแล้ว' +
+                                (completedAt != null
+                                    ? ' เมื่อ ${DateFormat('d MMM, HH:mm', 'th').format(completedAt.toDate())}'
+                                    : ''),
+                            style: TextStyle(
+                              color: _completedColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                        // --- END COMPLETED BY ---
+                      ],
+                    );
+                  },
+                ),
+                // --- *** END MODIFIED SECTION *** ---
               ],
             ),
           ),
           actions: <Widget>[
+            // ... (Existing actions: Completion button and Close button) ...
+            // ... (Make sure they are still here) ...
+            // --- *** MODIFIED ACTIONS BLOCK *** ---
+            // --- NEW COMPLETION BUTTON ---
+            if (!isCompleted && (type == 'appointment' || type == 'habit_item'))
+              TextButton(
+                style: TextButton.styleFrom(
+                  backgroundColor: _completedColor.withValues(alpha: 0.1),
+                  foregroundColor: _completedColor,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'ทำเครื่องหมายว่าเสร็จสิ้น',
+                      style: TextStyle(
+                        fontFamily: 'NotoLoopedThaiUI',
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  if (type == 'appointment') {
+                    _showCompleteTaskDialog(context, taskId, groupId, title);
+                  } else if (type == 'habit_item') {
+                    _showCompleteHabitItemDialog(
+                      context,
+                      taskId,
+                      groupId,
+                      subTaskKey!,
+                      title,
+                      habitTime,
+                    );
+                  }
+                },
+              ),
+
+            // --- EXISTING CLOSE BUTTON ---
             TextButton(
               child: const Text(
                 'ปิด',
@@ -2748,6 +2950,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.of(dialogContext).pop();
               },
             ),
+            // --- *** END MODIFIED ACTIONS BLOCK *** ---
           ],
         );
       },
