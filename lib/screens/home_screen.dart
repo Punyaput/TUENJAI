@@ -2888,12 +2888,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ],
-                        // --- END COMPLETED BY ---
                       ],
                     );
                   },
                 ),
-                // --- *** END MODIFIED SECTION *** ---
               ],
             ),
           ),

@@ -80,7 +80,7 @@ class InitialScreen extends StatelessWidget {
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.18),
                   child: Text(
-                    'แอปพลิเคชันช่วยเหลือผู้ดูแล เพื่อช่วยเหลือผู้ป่วย Alzheimer',
+                    'แอปพลิเคชันสำหรับช่วยดูแลคนที่คุณห่วงใยร่วมกันอย่างง่ายดาย',
                     style: TextStyle(
                       fontFamily: 'NotoLoopedThaiUI',
                       fontSize: screenWidth * 0.046,
